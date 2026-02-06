@@ -2,7 +2,6 @@ help:
 	@echo "Available targets:\n\
 		clean - remove build files and directories\n\
 		lint  - run code formatters and linters\n\
-		test  - run automated test suite\n\
 		dist  - generate release archives\n\
 	"
 
@@ -14,3 +13,6 @@ check:
 
 lint: check
 	bin/lint.sh
+
+dist: check clean
+	bin/dist.sh

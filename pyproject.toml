@@ -20,6 +20,7 @@ classifiers = [
 
 [dependency-groups]
 dev = [
+    "build",
     "ruff",
     "validate-pyproject[all]",
 ]

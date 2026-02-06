@@ -35,8 +35,7 @@ class PackageDepsExtractor:
 
         direct_set = set(direct_deps)
         graph.external_deps = [
-            ExternalDep(name=d, is_direct=(d in direct_set))
-            for d in sorted(all_deps)
+            ExternalDep(name=d, is_direct=(d in direct_set)) for d in sorted(all_deps)
         ]
         graph.external_deps_graph = dep_graph
 

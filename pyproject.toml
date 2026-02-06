@@ -17,5 +17,11 @@ classifiers = [
     "Topic :: Software Development :: Documentation",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff",
+    "validate-pyproject[all]",
+]
+
 [project.scripts]
 codezoom = "codezoom.cli:main"

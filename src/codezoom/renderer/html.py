@@ -41,9 +41,7 @@ def _graph_to_json(graph: ProjectGraph) -> str:
             }
 
     external_deps_all = sorted(d.name for d in graph.external_deps)
-    external_deps_direct = sorted(
-        d.name for d in graph.external_deps if d.is_direct
-    )
+    external_deps_direct = sorted(d.name for d in graph.external_deps if d.is_direct)
 
     data = {
         "project_name": graph.project_name,

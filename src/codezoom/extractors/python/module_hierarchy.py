@@ -67,7 +67,13 @@ def _run_pydeps(
         )
         return None
 
-    cmd: list[str] = [pydeps_path, str(src_dir), "--show-deps", "--no-show", "--no-output"]
+    cmd: list[str] = [
+        pydeps_path,
+        str(src_dir),
+        "--show-deps",
+        "--no-show",
+        "--no-output",
+    ]
     if exclude:
         cmd.extend(["-xx"] + exclude)
 
@@ -95,7 +101,9 @@ def _build_deps_from_files(src_dir: Path, root_node_id: str) -> dict:
         if py_file.name == "__init__.py":
             continue
         relative = py_file.relative_to(src_dir.parent)
-        module_name = str(relative).replace("/", ".").replace("\\", ".").removesuffix(".py")
+        module_name = (
+            str(relative).replace("/", ".").replace("\\", ".").removesuffix(".py")
+        )
         deps[module_name] = {"imports": []}
     return deps
 

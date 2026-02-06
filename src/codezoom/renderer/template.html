@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>codezoom</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.2.2/cytoscape-dagre.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        #header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        #controls {
+            padding: 15px;
+            background: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #34495e;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        #breadcrumb {
+            flex: 1;
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+        }
+
+        #breadcrumb a {
+            color: #2c3e50;
+            cursor: pointer;
+            text-decoration: underline;
+            margin: 0 5px;
+        }
+
+        #breadcrumb a:hover {
+            color: #34495e;
+        }
+
+        #cy {
+            width: 100%;
+            height: calc(100vh - 200px);
+            background: white;
+            border-top: 1px solid #ddd;
+        }
+
+        #info {
+            padding: 10px 15px;
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            font-size: 13px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1 id="titleText"></h1>
+        <p>Click on any node to zoom into its dependencies. Use breadcrumbs to navigate back.</p>
+    </div>
+
+    <div id="info">
+        <strong>How to use:</strong> Click on a package name to drill down and see its internal structure and dependencies. Use the breadcrumb navigation at the top to go back up levels.
+    </div>
+
+    <div id="controls">
+        <button id="backBtn" onclick="goBack()">&#8592; Back</button>
+        <button id="resetBtn" onclick="reset()">Reset to Top</button>
+        <button onclick="applyLayout('dagre', 'cose')">Layout: Hierarchical</button>
+        <button onclick="applyLayout('cose')">Layout: Force-Directed</button>
+        <button onclick="cy.fit()">Fit View</button>
+        <div style="flex: 1; display: flex; align-items: center; gap: 20px; margin-left: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label for="sizeSlider" style="color: #666; font-size: 14px;">Node Size:</label>
+                <input type="range" id="sizeSlider" min="20" max="100" value="50" style="width: 120px;">
+                <span id="sizeValue" style="color: #666; font-size: 14px; min-width: 30px;">50</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label for="fontSlider" style="color: #666; font-size: 14px;">Font Size:</label>
+                <input type="range" id="fontSlider" min="8" max="40" value="12" style="width: 120px;">
+                <span id="fontValue" style="color: #666; font-size: 14px; min-width: 30px;">12</span>
+            </div>
+        </div>
+        <div id="breadcrumb"></div>
+    </div>
+
+    <div id="cy"></div>
+
+    <script>
+        // All data injected as a single JSON blob
+        const data = $DATA_JSON;
+
+        const hierarchy = data.hierarchy;
+        const functionData = data.functionData;
+        const pythonDeps = data.external_deps;
+        const pythonDepsDirect = data.external_deps_direct;
+        const pythonDepsGraph = data.external_deps_graph;
+        const ROOT = data.root_node_id;
+
+        // Set page title
+        document.getElementById('titleText').textContent = data.project_name + ' Dependency Explorer';
+        document.title = data.project_name + ' — codezoom';
+
+        // Navigation state
+        let currentNode = ROOT;
+        const history = [ROOT];
+
+        let cy = null;
+
+        function applyNodeColors() {
+            if (!cy) return;
+            cy.nodes().forEach(node => {
+                const d = node.data();
+                if (d.bgColor) node.style('background-color', d.bgColor);
+                if (d.borderWidth) node.style('border-width', d.borderWidth);
+                if (d.borderColor) node.style('border-color', d.borderColor);
+            });
+        }
+
+        function initCytoscape() {
+            if (cy) cy.destroy();
+
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                elements: buildGraphData(currentNode),
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'content': 'data(label)',
+                            'width': 50,
+                            'height': 50,
+                            'padding': '5px',
+                            'text-opacity': 1,
+                            'color': '#222222',
+                            'font-size': '12px',
+                            'font-weight': 'bold',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'background-color': '#3498db',
+                            'border-width': 2,
+                            'border-color': '#2980b9',
+                            'background-opacity': 0.9,
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'curve-style': 'bezier',
+                            'target-arrow-shape': 'triangle',
+                            'target-arrow-color': '#666',
+                            'target-arrow-fill': 'filled',
+                            'arrow-scale': 1.5,
+                            'line-color': '#95a5a6',
+                            'width': 2,
+                            'opacity': 0.7,
+                        }
+                    },
+                    {
+                        selector: 'node:hover',
+                        style: {
+                            'background-color': '#f1c40f',
+                            'border-color': '#d68910',
+                        }
+                    },
+                ],
+                layout: {
+                    name: 'cose',
+                    directed: true,
+                    animate: true,
+                    animationDuration: 500,
+                },
+                wheelSensitivity: 0.1,
+                minZoom: 0.1,
+                maxZoom: 3,
+            });
+
+            cy.on('tap', 'node', function(evt) {
+                const node = evt.target;
+                const nodeId = node.id();
+
+                const hasChildren = hierarchy[nodeId] && hierarchy[nodeId].children && hierarchy[nodeId].children.length > 0;
+                const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
+
+                let isClickableClass = false;
+                if (nodeId.includes(':')) {
+                    const lastColonIdx = nodeId.lastIndexOf(':');
+                    const moduleId = nodeId.substring(0, lastColonIdx);
+                    const classPath = nodeId.substring(lastColonIdx + 1);
+                    const isMethodNode = classPath.includes('.');
+                    if (!isMethodNode) {
+                        const className = classPath;
+                        if (functionData[moduleId] && functionData[moduleId][className]) {
+                            const classInfo = functionData[moduleId][className];
+                            isClickableClass = classInfo.type === 'class' && classInfo.methods && Object.keys(classInfo.methods).length > 0;
+                        }
+                    }
+                }
+
+                if (hasChildren || hasFunctions || isClickableClass) {
+                    drillInto(nodeId);
+                }
+            });
+
+            setTimeout(() => {
+                applyNodeColors();
+                cy.fit();
+            }, 100);
+        }
+
+        function buildGraphData(nodeId) {
+            const elements = [];
+
+            // Method-level nodes (format: "moduleId:className")
+            if (nodeId.includes(':')) {
+                const lastColonIdx = nodeId.lastIndexOf(':');
+                const moduleId = nodeId.substring(0, lastColonIdx);
+                const classPath = nodeId.substring(lastColonIdx + 1);
+                const className = classPath.split('.')[0];
+
+                if (functionData[moduleId] && functionData[moduleId][className] && functionData[moduleId][className].methods) {
+                    return buildMethodGraph(moduleId, className);
+                }
+            }
+
+            // Top-level: show external dependencies
+            if (nodeId === ROOT && history.length === 1 && pythonDeps.length > 0) {
+                const seenEdges = new Set();
+
+                pythonDeps.forEach(dep => {
+                    const isDirect = pythonDepsDirect.includes(dep);
+                    elements.push({
+                        data: {
+                            id: 'py-dep-' + dep,
+                            label: dep,
+                            bgColor: isDirect ? '#34495e' : '#95a5a6',
+                            borderWidth: isDirect ? 2 : 1,
+                            borderColor: isDirect ? '#2c3e50' : '#7f8c8d',
+                        }
+                    });
+                });
+
+                pythonDepsDirect.forEach(dep => {
+                    const edgeId = ROOT + '->py-dep-' + dep;
+                    if (!seenEdges.has(edgeId)) {
+                        elements.push({ data: { id: edgeId, source: ROOT, target: 'py-dep-' + dep } });
+                        seenEdges.add(edgeId);
+                    }
+                });
+
+                pythonDeps.forEach(dep => {
+                    if (pythonDepsGraph[dep]) {
+                        pythonDepsGraph[dep].forEach(depDep => {
+                            if (pythonDeps.includes(depDep)) {
+                                const edgeId = 'py-dep-' + dep + '->py-dep-' + depDep;
+                                if (!seenEdges.has(edgeId)) {
+                                    elements.push({ data: { id: edgeId, source: 'py-dep-' + dep, target: 'py-dep-' + depDep } });
+                                    seenEdges.add(edgeId);
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // Root node (drillable)
+                elements.push({
+                    data: {
+                        id: ROOT,
+                        label: data.project_name,
+                        bgColor: '#e74c3c',
+                        borderWidth: 3,
+                        borderColor: '#c0392b',
+                    }
+                });
+
+                return elements;
+            }
+
+            // Regular hierarchy node
+            const node = hierarchy[nodeId];
+            if (!node) return elements;
+
+            // Leaf module with function data
+            if (functionData[nodeId]) {
+                return buildFunctionGraph(nodeId);
+            }
+
+            const children = node.children || [];
+            const childSet = new Set(children);
+
+            if (children.length > 0) {
+                children.forEach(childId => {
+                    const childNode = hierarchy[childId];
+                    const hasChildren = childNode && childNode.children && childNode.children.length > 0;
+                    const hasFunctions = functionData[childId];
+                    const isClickable = hasChildren || hasFunctions;
+
+                    elements.push({
+                        data: {
+                            id: childId,
+                            label: childId.split('.').pop(),
+                            bgColor: isClickable ? '#f39c12' : '#3498db',
+                            borderWidth: isClickable ? 3 : 2,
+                            borderColor: isClickable ? '#d68910' : '#2980b9',
+                        }
+                    });
+                });
+
+                children.forEach(childId => {
+                    const childNode = hierarchy[childId];
+                    if (childNode && childNode.imports_to) {
+                        childNode.imports_to.forEach(targetId => {
+                            if (childSet.has(targetId) && childId !== targetId) {
+                                const edgeId = childId + '->' + targetId;
+                                if (!elements.find(el => el.data.id === edgeId)) {
+                                    elements.push({ data: { id: edgeId, source: childId, target: targetId } });
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+
+            return elements;
+        }
+
+        function buildFunctionGraph(moduleId) {
+            const elements = [];
+            const functions = functionData[moduleId];
+            if (!functions) return elements;
+
+            Object.entries(functions).forEach(([name, info]) => {
+                const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0) || (info.calls && info.calls.length > 0);
+                let bgColor = info.type === 'class' ? '#9b59b6' : '#16a085';
+                let borderWidth = hasMethodsOrCalls ? 3 : 2;
+
+                elements.push({
+                    data: {
+                        id: moduleId + ':' + name,
+                        label: name,
+                        bgColor: bgColor,
+                        borderWidth: borderWidth,
+                        borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
+                        hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
+                    }
+                });
+            });
+
+            Object.entries(functions).forEach(([name, info]) => {
+                if (info.calls && info.calls.length > 0) {
+                    info.calls.forEach(calledName => {
+                        if (functions[calledName]) {
+                            const edgeId = moduleId + ':' + name + '->' + calledName;
+                            if (!elements.find(el => el.data.id === edgeId)) {
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + calledName } });
+                            }
+                        }
+                    });
+                }
+
+                if (info.inherits && info.inherits.length > 0) {
+                    info.inherits.forEach(parentName => {
+                        if (functions[parentName]) {
+                            const edgeId = moduleId + ':' + name + '-inherits-' + parentName;
+                            if (!elements.find(el => el.data.id === edgeId)) {
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + parentName } });
+                            }
+                        }
+                    });
+                }
+            });
+
+            return elements;
+        }
+
+        function buildMethodGraph(moduleId, className) {
+            const elements = [];
+            const functions = functionData[moduleId];
+            if (!functions || !functions[className]) return elements;
+
+            const classInfo = functions[className];
+            const methods = classInfo.methods || {};
+
+            Object.entries(methods).forEach(([methodName, methodInfo]) => {
+                elements.push({
+                    data: {
+                        id: moduleId + ':' + className + '.' + methodName,
+                        label: methodName,
+                        bgColor: '#e74c3c',
+                        borderWidth: 2,
+                        borderColor: '#c0392b',
+                    }
+                });
+            });
+
+            Object.entries(methods).forEach(([methodName, methodInfo]) => {
+                if (methodInfo.calls && methodInfo.calls.length > 0) {
+                    methodInfo.calls.forEach(calledName => {
+                        if (methods[calledName]) {
+                            const edgeId = moduleId + ':' + className + '.' + methodName + '->' + calledName;
+                            if (!elements.find(el => el.data.id === edgeId)) {
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + className + '.' + methodName, target: moduleId + ':' + className + '.' + calledName } });
+                            }
+                        }
+                    });
+                }
+            });
+
+            return elements;
+        }
+
+        function drillInto(nodeId) {
+            if (!nodeId.includes(':') && !hierarchy[nodeId]) return;
+            currentNode = nodeId;
+            history.push(nodeId);
+            updateUI();
+        }
+
+        function goBack() {
+            if (history.length > 1) {
+                history.pop();
+                currentNode = history[history.length - 1];
+                updateUI();
+            }
+        }
+
+        function reset() {
+            currentNode = ROOT;
+            history.length = 1;
+            history[0] = ROOT;
+            updateUI();
+        }
+
+        function updateUI() {
+            updateBreadcrumb();
+            updateBackButton();
+            initCytoscape();
+        }
+
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('breadcrumb');
+            const parts = [];
+
+            history.forEach((nodeId, idx) => {
+                if (idx === history.length - 1) {
+                    parts.push('<strong>' + nodeId + '</strong>');
+                } else {
+                    parts.push('<a onclick="jumpTo(' + idx + ')">' + nodeId + '</a>');
+                }
+            });
+
+            breadcrumb.innerHTML = '<strong>Navigation:</strong> ' + parts.join(' / ');
+        }
+
+        function jumpTo(idx) {
+            history.length = idx + 1;
+            currentNode = history[history.length - 1];
+            updateUI();
+        }
+
+        function updateBackButton() {
+            document.getElementById('backBtn').disabled = history.length <= 1;
+        }
+
+        function applyLayout(name, fallback) {
+            try {
+                cy.layout({name: name}).run();
+            } catch(e) {
+                if (fallback) cy.layout({name: fallback}).run();
+            }
+        }
+
+        // Node size slider
+        const sizeSlider = document.getElementById('sizeSlider');
+        const sizeValue = document.getElementById('sizeValue');
+
+        sizeSlider.addEventListener('input', function() {
+            const newSize = this.value;
+            sizeValue.textContent = newSize;
+            if (cy) {
+                cy.nodes().style('width', newSize);
+                cy.nodes().style('height', newSize);
+            }
+        });
+
+        // Font size slider
+        const fontSlider = document.getElementById('fontSlider');
+        const fontValue = document.getElementById('fontValue');
+
+        fontSlider.addEventListener('input', function() {
+            const newFontSize = this.value;
+            fontValue.textContent = newFontSize;
+            if (cy) {
+                cy.nodes().style('font-size', newFontSize + 'px');
+            }
+        });
+
+        // Initialize
+        updateUI();
+    </script>
+</body>
+</html>

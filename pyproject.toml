@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codezoom"
+version = "0.1.0.dev0"
+description = "Multi-level code structure explorer — interactive drill-down HTML visualizations"
+license = "Unlicense"
+requires-python = ">=3.11"
+authors = [
+    { name = "Curtis Rueden" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Documentation",
+]
+
+[project.scripts]
+codezoom = "codezoom.cli:main"

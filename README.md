@@ -12,6 +12,23 @@ structure at multiple levels of detail:
 
 Click any node to drill down. Use breadcrumb navigation to go back up.
 
+## Examples
+
+<table>
+  <tr>
+    <td align="center"><a href="screenshots/dependencies.png"><img src="screenshots/jgo-dependencies.png" width="400"></a><br><em>External dependencies</em></td>
+    <td align="center"><a href="screenshots/modules-1.png"><img src="screenshots/jgo-submodules.png" width="400"></a><br><em>Project submodules</em></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="screenshots/modules-1a.png"><img src="screenshots/jgo-env.png" width="400"></a><br><em>A submodule's children</em></td>
+    <td align="center"><a href="screenshots/modules-2.png"><img src="screenshots/jgo-cli.png" width="400"></a><br><em>Another submodule's children</em></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="screenshots/modules-3.png"><img src="screenshots/jgo-cli-rich-formatters.png" width="400"></a><br><em>Single-file view</em></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Installation
 
 <details><summary><strong>Installing codezoom with uv</strong></summary>

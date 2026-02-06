@@ -488,10 +488,11 @@
             const parts = [];
 
             history.forEach((nodeId, idx) => {
+                const label = idx === 0 ? data.project_name : nodeId;
                 if (idx === history.length - 1) {
-                    parts.push('<strong>' + nodeId + '</strong>');
+                    parts.push('<strong>' + label + '</strong>');
                 } else {
-                    parts.push('<a onclick="jumpTo(' + idx + ')">' + nodeId + '</a>');
+                    parts.push('<a onclick="jumpTo(' + idx + ')">' + label + '</a>');
                 }
             });
 

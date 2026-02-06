@@ -11,7 +11,7 @@ from codezoom.renderer.html import render_html
 
 
 def _guess_project_name(project_dir: Path) -> str:
-    """Guess the project (package) name from pyproject.toml or directory name."""
+    """Guess the project display name from pyproject.toml or directory name."""
     pyproject = project_dir / "pyproject.toml"
     if pyproject.exists():
         try:
@@ -28,6 +28,35 @@ def _guess_project_name(project_dir: Path) -> str:
     return project_dir.name.replace("-", "_")
 
 
+def _find_package_name(project_dir: Path) -> str | None:
+    """Discover the actual importable Python package name.
+
+    The package name may differ from the project name (e.g. project
+    ``pyimagej`` provides package ``imagej``).  We look for a directory
+    containing an ``__init__.py`` under ``src/`` (src-layout) or directly
+    under the project root (flat layout), skipping common non-package dirs.
+    """
+    _SKIP = {
+        ".git", ".github", ".tox", ".venv", ".eggs", ".mypy_cache",
+        ".pytest_cache", "__pycache__", "node_modules", "build", "dist",
+        "docs", "doc", "tests", "test", "scripts", "bin", "examples",
+    }
+
+    # src-layout: look for src/<pkg>/__init__.py
+    src = project_dir / "src"
+    if src.is_dir():
+        for child in sorted(src.iterdir()):
+            if child.is_dir() and child.name not in _SKIP and (child / "__init__.py").exists():
+                return child.name
+
+    # flat layout: look for <pkg>/__init__.py at the project root
+    for child in sorted(project_dir.iterdir()):
+        if child.is_dir() and child.name not in _SKIP and (child / "__init__.py").exists():
+            return child.name
+
+    return None
+
+
 def run(
     project_dir: Path,
     *,
@@ -38,7 +67,7 @@ def run(
     """Run the full codezoom pipeline and return the output path."""
     project_dir = project_dir.resolve()
     project_name = name or _guess_project_name(project_dir)
-    root_node_id = project_name  # top-level node in the hierarchy
+    root_node_id = _find_package_name(project_dir) or project_name
 
     graph = ProjectGraph(
         project_name=project_name,

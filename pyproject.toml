@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "codezoom"
 version = "0.1.0.dev0"
 description = "Multi-level code structure explorer — interactive drill-down HTML visualizations"
+readme = "README.md"
 license = "Unlicense"
 requires-python = ">=3.11"
 authors = [

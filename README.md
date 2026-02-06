@@ -1,0 +1,98 @@
+# codezoom
+
+Multi-level code structure explorer — interactive drill-down HTML visualizations.
+
+codezoom generates a standalone HTML file that lets you explore a project's
+structure at multiple levels of detail:
+
+1. **External dependencies** — direct and transitive packages from `pyproject.toml` + `uv.lock`
+2. **Package hierarchy** — sub-packages and modules (via [pydeps](https://github.com/thebjorn/pydeps) or file-tree fallback)
+3. **Module internals** — functions and classes extracted from the AST
+4. **Class internals** — methods and their call relationships
+
+Click any node to drill down. Use breadcrumb navigation to go back up.
+
+## Installation
+
+<details><summary><strong>Installing codezoom with uv</strong></summary>
+
+```shell
+uv tool install codezoom
+```
+
+</details>
+<details><summary><strong>Installing codezoom with pip</strong></summary>
+
+```shell
+pip install codezoom
+```
+
+</details>
+<details><summary><strong>Installing codezoom from source</strong></summary>
+
+```shell
+git clone https://github.com/apposed/codezoom
+uv tool install --with-editable codezoom codezoom
+```
+
+When installed in this fashion, changes to the codezoom source code will be immediately reflected when running `codezoom` from the command line.
+
+</details>
+<details><summary><strong>Using codezoom as a dependency</strong></summary>
+
+```shell
+uv add codezoom
+```
+or
+```shell
+pixi add --pypi codezoom
+```
+Not sure which to use? [Read this](https://jacobtomlinson.dev/posts/2025/python-package-managers-uv-vs-pixi/#so-what-do-i-use).
+
+</details>
+
+## Usage
+
+```bash
+codezoom /path/to/project                     # auto-detect, output to <project>_deps.html
+codezoom /path/to/project -o output.html      # custom output path
+codezoom /path/to/project --name "My Project" # custom display name
+codezoom /path/to/project --open              # open in browser after generating
+```
+
+Also works as a module:
+
+```bash
+python -m codezoom /path/to/project
+```
+
+## Requirements
+
+- Python 3.11+
+- No mandatory runtime dependencies beyond the standard library
+- Optional: [pydeps](https://github.com/thebjorn/pydeps) for richer module-level
+  import analysis (falls back to file-tree scanning without it)
+
+## Per-project configuration
+
+Projects can include a `.codezoom.toml` or a `[tool.codezoom]` section in
+`pyproject.toml`:
+
+```toml
+[tool.codezoom]
+exclude = ["tests", "docs", "__pycache__"]
+```
+
+The `exclude` list is passed to pydeps via `-xx` to omit modules from the
+hierarchy.
+
+## Language support
+
+| Language | Status |
+|----------|--------|
+| Python   | Supported |
+| Java     | Stub extractors present — not yet implemented |
+
+## License
+
+[UNLICENSE](UNLICENSE) - All copyright disclaimed.

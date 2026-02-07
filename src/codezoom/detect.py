@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from codezoom.extractors.base import Extractor
@@ -22,11 +21,16 @@ def detect_extractors(project_dir: Path, project_name: str) -> list[Extractor]:
         extractors.append(ModuleHierarchyExtractor(exclude=exclude))
         extractors.append(AstSymbolsExtractor())
 
-    if (project_dir / "pom.xml").exists() or (project_dir / "build.gradle").exists():
-        print(
-            "Note: Java project detected — Java support coming soon.",
-            file=sys.stderr,
+    if (project_dir / "pom.xml").exists():
+        from codezoom.extractors.java import (
+            JavaAstSymbolsExtractor,
+            JavaMavenDepsExtractor,
+            JavaPackageHierarchyExtractor,
         )
+
+        extractors.append(JavaMavenDepsExtractor())
+        extractors.append(JavaPackageHierarchyExtractor())
+        extractors.append(JavaAstSymbolsExtractor())
 
     return extractors
 

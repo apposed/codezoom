@@ -326,20 +326,23 @@
             const node = hierarchy[nodeId];
             if (!node) return elements;
 
-            // Leaf module with function data
-            if (functionData[nodeId]) {
+            const children = node.children || [];
+            const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
+
+            // Leaf module with function data only (no sub-package children)
+            if (hasFunctions && children.length === 0) {
                 return buildFunctionGraph(nodeId);
             }
 
-            const children = node.children || [];
+            // Build child package nodes
             const childSet = new Set(children);
 
             if (children.length > 0) {
                 children.forEach(childId => {
                     const childNode = hierarchy[childId];
                     const hasChildren = childNode && childNode.children && childNode.children.length > 0;
-                    const hasFunctions = functionData[childId];
-                    const isClickable = hasChildren || hasFunctions;
+                    const childHasFunctions = functionData[childId];
+                    const isClickable = hasChildren || childHasFunctions;
 
                     elements.push({
                         data: {
@@ -365,6 +368,45 @@
                         });
                     }
                 });
+            }
+
+            // Also show symbols (classes) alongside sub-package children
+            if (hasFunctions) {
+                const functions = functionData[nodeId];
+                Object.entries(functions).forEach(([name, info]) => {
+                    const nodeFullId = nodeId + ':' + name;
+                    const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0) || (info.calls && info.calls.length > 0);
+
+                    elements.push({
+                        data: {
+                            id: nodeFullId,
+                            label: name,
+                            bgColor: info.type === 'class' ? '#9b59b6' : '#16a085',
+                            borderWidth: hasMethodsOrCalls ? 3 : 2,
+                            borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
+                            hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
+                        }
+                    });
+                });
+
+                // Add class-level dependency edges from jdeps
+                const classDeps = hierarchy[nodeId] && hierarchy[nodeId].class_deps;
+                if (classDeps) {
+                    const nodeIds = new Set(elements.filter(e => !e.data.source).map(e => e.data.id));
+                    Object.entries(classDeps).forEach(([srcClass, targets]) => {
+                        const srcId = nodeId + ':' + srcClass;
+                        if (!nodeIds.has(srcId)) return;
+                        targets.forEach(target => {
+                            // target with '.' is a package node ID; without is a same-package class
+                            const tgtId = target.includes('.') ? target : nodeId + ':' + target;
+                            if (!nodeIds.has(tgtId) || srcId === tgtId) return;
+                            const edgeId = srcId + '->dep-' + target;
+                            if (!elements.find(el => el.data.id === edgeId)) {
+                                elements.push({ data: { id: edgeId, source: srcId, target: tgtId } });
+                            }
+                        });
+                    });
+                }
             }
 
             return elements;
@@ -415,6 +457,25 @@
                     });
                 }
             });
+
+            // Add class-level dependency edges from jdeps
+            const classDeps = hierarchy[moduleId] && hierarchy[moduleId].class_deps;
+            if (classDeps) {
+                const nodeIds = new Set(elements.filter(e => !e.data.source).map(e => e.data.id));
+                Object.entries(classDeps).forEach(([srcClass, targets]) => {
+                    const srcId = moduleId + ':' + srcClass;
+                    if (!nodeIds.has(srcId)) return;
+                    targets.forEach(target => {
+                        // target with '.' is a package node ID; without is a same-package class
+                        const tgtId = target.includes('.') ? target : moduleId + ':' + target;
+                        if (!nodeIds.has(tgtId) || srcId === tgtId) return;
+                        const edgeId = srcId + '->dep-' + target;
+                        if (!elements.find(el => el.data.id === edgeId)) {
+                            elements.push({ data: { id: edgeId, source: srcId, target: tgtId } });
+                        }
+                    });
+                });
+            }
 
             return elements;
         }

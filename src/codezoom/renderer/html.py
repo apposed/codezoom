@@ -30,11 +30,14 @@ def _graph_to_json(graph: ProjectGraph) -> str:
     function_data: dict = {}
 
     for node_id, node in graph.hierarchy.items():
-        hierarchy[node_id] = {
+        entry = {
             "children": node.children,
             "imports_from": node.imports_from,
             "imports_to": node.imports_to,
         }
+        if node.class_deps:
+            entry["class_deps"] = node.class_deps
+        hierarchy[node_id] = entry
         if node.symbols:
             function_data[node_id] = {
                 k: _symbol_to_dict(v) for k, v in node.symbols.items()

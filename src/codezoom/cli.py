@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from codezoom.pipeline import run
@@ -36,8 +37,18 @@ def main(argv: list[str] | None = None) -> None:
         dest="open_browser",
         help="Open the generated HTML in a browser",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose (debug) output",
+    )
 
     args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    if args.verbose:
+        logging.getLogger("codezoom").setLevel(logging.DEBUG)
 
     run(
         args.project_dir,

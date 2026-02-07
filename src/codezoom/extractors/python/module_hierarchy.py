@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 from codezoom.model import NodeData, ProjectGraph
+
+logger = logging.getLogger(__name__)
 
 
 class ModuleHierarchyExtractor:
@@ -60,10 +62,9 @@ def _run_pydeps(
     """Run pydeps and return the JSON dict, or None on failure."""
     pydeps_path = shutil.which("pydeps")
     if not pydeps_path:
-        print(
-            "Warning: pydeps not found (install with `pip install pydeps`). "
-            "Falling back to file-based hierarchy.",
-            file=sys.stderr,
+        logger.warning(
+            "pydeps not found (install with `pip install pydeps`). "
+            "Falling back to file-based hierarchy."
         )
         return None
 
@@ -84,13 +85,13 @@ def _run_pydeps(
         cwd=str(project_dir),
     )
     if result.returncode != 0:
-        print(f"Warning: pydeps failed: {result.stderr}", file=sys.stderr)
+        logger.warning("pydeps failed: %s", result.stderr)
         return None
 
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as e:
-        print(f"Warning: pydeps JSON parse error: {e}", file=sys.stderr)
+        logger.warning("pydeps JSON parse error: %s", e)
         return None
 
 

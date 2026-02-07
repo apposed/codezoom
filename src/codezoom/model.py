@@ -25,6 +25,7 @@ class NodeData:
     imports_to: list[str] = field(default_factory=list)
     imports_from: list[str] = field(default_factory=list)
     symbols: dict[str, SymbolData] | None = None
+    class_deps: dict[str, list[str]] | None = None
 
 
 @dataclass

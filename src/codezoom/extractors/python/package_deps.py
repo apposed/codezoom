@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 from pathlib import Path
 
 from codezoom.model import ExternalDep, ProjectGraph
+
+logger = logging.getLogger(__name__)
 
 
 class PackageDepsExtractor:
@@ -68,7 +70,7 @@ def _extract_python_dependencies(
             if pkg_name:
                 direct_deps.append(pkg_name.lower())
     except Exception as e:
-        print(f"Warning: Could not parse pyproject.toml: {e}", file=sys.stderr)
+        logger.warning("Could not parse pyproject.toml: %s", e)
 
     # --- transitive deps from uv.lock ---
     dep_graph: dict[str, list[str]] = {}
@@ -95,6 +97,6 @@ def _extract_python_dependencies(
                     if pkg_deps:
                         dep_graph[pkg_name] = pkg_deps
         except Exception as e:
-            print(f"Warning: Could not parse uv.lock: {e}", file=sys.stderr)
+            logger.warning("Could not parse uv.lock: %s", e)
 
     return sorted(set(direct_deps)), dep_graph

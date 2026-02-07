@@ -108,7 +108,7 @@ hierarchy.
 | Language | Status |
 |----------|--------|
 | Python   | Supported |
-| Java     | Stub extractors present — not yet implemented |
+| Java     | Supported |
 
 ## License
 

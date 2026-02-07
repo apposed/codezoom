@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codezoom"
-version = "0.2.0.dev0"
+version = "1.0.0"
 description = "Multi-level code structure explorer — interactive drill-down HTML visualizations"
 readme = "README.md"
 license = "Unlicense"

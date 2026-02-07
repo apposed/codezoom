@@ -8,6 +8,215 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.2.2/cytoscape-dagre.js"></script>
     <style>
+        :root {
+            /* Light theme (default) */
+            --bg-primary: #f5f5f5;
+            --bg-secondary: white;
+            --text-primary: #222222;
+            --text-secondary: #666;
+            --text-tertiary: #333;
+            --border-color: #ddd;
+            --border-color-secondary: #ccc;
+            --button-bg: #2c3e50;
+            --button-bg-hover: #34495e;
+            --button-bg-disabled: #bdc3c7;
+            --info-bg: #e8f4f8;
+            --info-border: #3498db;
+            --breadcrumb-link: #2c3e50;
+            --breadcrumb-link-hover: #34495e;
+            --shadow-color: rgba(0,0,0,0.1);
+        }
+
+        body.dark-theme {
+            /* Dark theme overrides */
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaa;
+            --text-tertiary: #ccc;
+            --border-color: #444;
+            --border-color-secondary: #555;
+            --button-bg: #4a5568;
+            --button-bg-hover: #5a6778;
+            --button-bg-disabled: #2d3748;
+            --info-bg: #2a3f5f;
+            --info-border: #4a9eff;
+            --breadcrumb-link: #4a9eff;
+            --breadcrumb-link-hover: #6bb0ff;
+            --shadow-color: rgba(0,0,0,0.3);
+        }
+
+        body.high-contrast-theme {
+            /* High contrast theme for accessibility */
+            --bg-primary: #ffffff;
+            --bg-secondary: #ffffff;
+            --text-primary: #000000;
+            --text-secondary: #000000;
+            --text-tertiary: #000000;
+            --border-color: #000000;
+            --border-color-secondary: #333333;
+            --button-bg: #000000;
+            --button-bg-hover: #333333;
+            --button-bg-disabled: #999999;
+            --info-bg: #ffff99;
+            --info-border: #000000;
+            --breadcrumb-link: #0000cc;
+            --breadcrumb-link-hover: #0000ff;
+            --shadow-color: rgba(0,0,0,0.3);
+        }
+
+        body.dracula-theme {
+            /* Official Dracula theme colors */
+            --bg-primary: #282a36;
+            --bg-secondary: #282a36;
+            --text-primary: #f8f8f2;
+            --text-secondary: #6272a4;
+            --text-tertiary: #f8f8f2;
+            --border-color: #44475a;
+            --border-color-secondary: #6272a4;
+            --button-bg: #6272a4;
+            --button-bg-hover: #bd93f9;
+            --button-bg-disabled: #44475a;
+            --info-bg: #44475a;
+            --info-border: #bd93f9;
+            --breadcrumb-link: #8be9fd;
+            --breadcrumb-link-hover: #ff79c6;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        body.nord-theme {
+            /* Nord theme - Arctic, north-bluish color palette */
+            --bg-primary: #2e3440;
+            --bg-secondary: #3b4252;
+            --text-primary: #eceff4;
+            --text-secondary: #d8dee9;
+            --text-tertiary: #e5e9f0;
+            --border-color: #4c566a;
+            --border-color-secondary: #434c5e;
+            --button-bg: #5e81ac;
+            --button-bg-hover: #81a1c1;
+            --button-bg-disabled: #434c5e;
+            --info-bg: #3b4252;
+            --info-border: #88c0d0;
+            --breadcrumb-link: #88c0d0;
+            --breadcrumb-link-hover: #8fbcbb;
+            --shadow-color: rgba(0,0,0,0.4);
+        }
+
+        body.solarized-dark-theme {
+            /* Solarized Dark - Precision colors by Ethan Schoonover */
+            --bg-primary: #002b36;
+            --bg-secondary: #073642;
+            --text-primary: #839496;
+            --text-secondary: #586e75;
+            --text-tertiary: #93a1a1;
+            --border-color: #073642;
+            --border-color-secondary: #586e75;
+            --button-bg: #268bd2;
+            --button-bg-hover: #2aa198;
+            --button-bg-disabled: #073642;
+            --info-bg: #073642;
+            --info-border: #268bd2;
+            --breadcrumb-link: #268bd2;
+            --breadcrumb-link-hover: #2aa198;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        body.solarized-light-theme {
+            /* Solarized Light - Precision colors by Ethan Schoonover */
+            --bg-primary: #fdf6e3;
+            --bg-secondary: #eee8d5;
+            --text-primary: #657b83;
+            --text-secondary: #93a1a1;
+            --text-tertiary: #586e75;
+            --border-color: #93a1a1;
+            --border-color-secondary: #839496;
+            --button-bg: #268bd2;
+            --button-bg-hover: #2aa198;
+            --button-bg-disabled: #93a1a1;
+            --info-bg: #eee8d5;
+            --info-border: #268bd2;
+            --breadcrumb-link: #268bd2;
+            --breadcrumb-link-hover: #2aa198;
+            --shadow-color: rgba(0,0,0,0.1);
+        }
+
+        body.monokai-theme {
+            /* Monokai - Classic TextMate theme */
+            --bg-primary: #272822;
+            --bg-secondary: #272822;
+            --text-primary: #f8f8f2;
+            --text-secondary: #75715e;
+            --text-tertiary: #f8f8f2;
+            --border-color: #49483e;
+            --border-color-secondary: #75715e;
+            --button-bg: #66d9ef;
+            --button-bg-hover: #a6e22e;
+            --button-bg-disabled: #49483e;
+            --info-bg: #49483e;
+            --info-border: #66d9ef;
+            --breadcrumb-link: #66d9ef;
+            --breadcrumb-link-hover: #a6e22e;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        body.one-dark-theme {
+            /* One Dark - Atom's iconic theme */
+            --bg-primary: #282c34;
+            --bg-secondary: #21252b;
+            --text-primary: #abb2bf;
+            --text-secondary: #5c6370;
+            --text-tertiary: #abb2bf;
+            --border-color: #181a1f;
+            --border-color-secondary: #3e4451;
+            --button-bg: #61afef;
+            --button-bg-hover: #98c379;
+            --button-bg-disabled: #3e4451;
+            --info-bg: #21252b;
+            --info-border: #61afef;
+            --breadcrumb-link: #61afef;
+            --breadcrumb-link-hover: #56b6c2;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        body.gruvbox-theme {
+            /* Gruvbox Dark - Retro groove colors */
+            --bg-primary: #282828;
+            --bg-secondary: #3c3836;
+            --text-primary: #ebdbb2;
+            --text-secondary: #a89984;
+            --text-tertiary: #ebdbb2;
+            --border-color: #504945;
+            --border-color-secondary: #665c54;
+            --button-bg: #458588;
+            --button-bg-hover: #689d6a;
+            --button-bg-disabled: #504945;
+            --info-bg: #3c3836;
+            --info-border: #458588;
+            --breadcrumb-link: #83a598;
+            --breadcrumb-link-hover: #8ec07c;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        body.tokyo-night-theme {
+            /* Tokyo Night - Clean, elegant dark theme */
+            --bg-primary: #1a1b26;
+            --bg-secondary: #24283b;
+            --text-primary: #c0caf5;
+            --text-secondary: #565f89;
+            --text-tertiary: #c0caf5;
+            --border-color: #414868;
+            --border-color-secondary: #565f89;
+            --button-bg: #7aa2f7;
+            --button-bg-hover: #7dcfff;
+            --button-bg-disabled: #414868;
+            --info-bg: #24283b;
+            --info-border: #7aa2f7;
+            --breadcrumb-link: #7aa2f7;
+            --breadcrumb-link-hover: #7dcfff;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -16,30 +225,31 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f5f5f5;
+            background: var(--bg-primary);
         }
 
         #header {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
-            border-bottom: 1px solid #ddd;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 4px var(--shadow-color);
         }
 
         #header h1 {
             font-size: 24px;
             margin-bottom: 10px;
+            color: var(--text-primary);
         }
 
         #header p {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
         #controls {
             padding: 15px;
-            background: white;
-            border-bottom: 1px solid #ddd;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
@@ -48,7 +258,7 @@
 
         button {
             padding: 8px 16px;
-            background: #2c3e50;
+            background: var(--button-bg);
             color: white;
             border: none;
             border-radius: 4px;
@@ -57,45 +267,61 @@
         }
 
         button:hover {
-            background: #34495e;
+            background: var(--button-bg-hover);
         }
 
         button:disabled {
-            background: #bdc3c7;
+            background: var(--button-bg-disabled);
             cursor: not-allowed;
         }
 
         #breadcrumb {
             flex: 1;
             font-size: 14px;
-            color: #666;
+            color: var(--text-secondary);
             font-style: italic;
         }
 
         #breadcrumb a {
-            color: #2c3e50;
+            color: var(--breadcrumb-link);
             cursor: pointer;
             text-decoration: underline;
             margin: 0 5px;
         }
 
         #breadcrumb a:hover {
-            color: #34495e;
+            color: var(--breadcrumb-link-hover);
         }
 
         #cy {
             width: 100%;
             height: calc(100vh - 200px);
-            background: white;
-            border-top: 1px solid #ddd;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
         }
 
         #info {
             padding: 10px 15px;
-            background: #e8f4f8;
-            border-left: 4px solid #3498db;
+            background: var(--info-bg);
+            border-left: 4px solid var(--info-border);
             font-size: 13px;
-            color: #333;
+            color: var(--text-tertiary);
+        }
+
+        #themeSelector {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            cursor: pointer;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .theme-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-left: 20px;
         }
     </style>
 </head>
@@ -115,16 +341,30 @@
         <button onclick="applyLayout('dagre', 'cose')">Layout: Hierarchical</button>
         <button onclick="applyLayout('cose')">Layout: Force-Directed</button>
         <button onclick="cy.fit()">Fit View</button>
+        <label for="themeSelector" class="theme-label">Theme:</label>
+        <select id="themeSelector" onchange="changeTheme(this.value)">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="dracula">Dracula</option>
+            <option value="nord">Nord</option>
+            <option value="solarized-dark">Solarized Dark</option>
+            <option value="solarized-light">Solarized Light</option>
+            <option value="monokai">Monokai</option>
+            <option value="one-dark">One Dark</option>
+            <option value="gruvbox">Gruvbox</option>
+            <option value="tokyo-night">Tokyo Night</option>
+            <option value="high-contrast">High Contrast</option>
+        </select>
         <div style="flex: 1; display: flex; align-items: center; gap: 20px; margin-left: 20px;">
             <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="sizeSlider" style="color: #666; font-size: 14px;">Node Size:</label>
+                <label for="sizeSlider" style="color: var(--text-secondary); font-size: 14px;">Node Size:</label>
                 <input type="range" id="sizeSlider" min="20" max="100" value="50" style="width: 120px;">
-                <span id="sizeValue" style="color: #666; font-size: 14px; min-width: 30px;">50</span>
+                <span id="sizeValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">50</span>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="fontSlider" style="color: #666; font-size: 14px;">Font Size:</label>
+                <label for="fontSlider" style="color: var(--text-secondary); font-size: 14px;">Font Size:</label>
                 <input type="range" id="fontSlider" min="8" max="40" value="12" style="width: 120px;">
-                <span id="fontValue" style="color: #666; font-size: 14px; min-width: 30px;">12</span>
+                <span id="fontValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">12</span>
             </div>
         </div>
         <div id="breadcrumb"></div>
@@ -147,6 +387,296 @@
         document.getElementById('titleText').textContent = data.project_name + ' Dependency Explorer';
         document.title = data.project_name + ' — codezoom';
 
+        // Theme configuration
+        const themes = {
+            light: {
+                nodeRoot: '#e74c3c',
+                nodeRootText: '#ffffff',
+                nodeClickable: '#f39c12',
+                nodeClickableText: '#000000',
+                nodeRegular: '#3498db',
+                nodeRegularText: '#ffffff',
+                nodeClass: '#9b59b6',
+                nodeClassText: '#ffffff',
+                nodeFunction: '#16a085',
+                nodeFunctionText: '#ffffff',
+                nodeMethod: '#e74c3c',
+                nodeMethodText: '#ffffff',
+                nodeExternalDirect: '#34495e',
+                nodeExternalDirectText: '#ffffff',
+                nodeExternalIndirect: '#95a5a6',
+                nodeExternalIndirectText: '#000000',
+                nodeHover: '#f1c40f',
+                nodeHoverText: '#000000',
+                edgeLine: '#95a5a6',
+                edgeArrow: '#666',
+                cyBackground: 'white',
+                textOutlineDark: '#000000',   // Dark outline for light text
+                textOutlineLight: '#ffffff'   // Light outline for dark text
+            },
+            dark: {
+                nodeRoot: '#ff6b6b',
+                nodeRootText: '#000000',
+                nodeClickable: '#ffa500',
+                nodeClickableText: '#000000',
+                nodeRegular: '#4a9eff',
+                nodeRegularText: '#000000',
+                nodeClass: '#bd93f9',
+                nodeClassText: '#000000',
+                nodeFunction: '#50fa7b',
+                nodeFunctionText: '#000000',
+                nodeMethod: '#ff6b6b',
+                nodeMethodText: '#000000',
+                nodeExternalDirect: '#6272a4',
+                nodeExternalDirectText: '#ffffff',
+                nodeExternalIndirect: '#44475a',
+                nodeExternalIndirectText: '#ffffff',
+                nodeHover: '#f1fa8c',
+                nodeHoverText: '#000000',
+                edgeLine: '#6272a4',
+                edgeArrow: '#888',
+                cyBackground: '#1e1e1e',
+                textOutlineDark: '#000000',
+                textOutlineLight: '#ffffff'
+            },
+            'high-contrast': {
+                nodeRoot: '#cc0000',
+                nodeRootText: '#ffffff',
+                nodeClickable: '#ff8800',
+                nodeClickableText: '#000000',
+                nodeRegular: '#0066cc',
+                nodeRegularText: '#ffffff',
+                nodeClass: '#7700cc',
+                nodeClassText: '#ffffff',
+                nodeFunction: '#008866',
+                nodeFunctionText: '#ffffff',
+                nodeMethod: '#cc0000',
+                nodeMethodText: '#ffffff',
+                nodeExternalDirect: '#000000',
+                nodeExternalDirectText: '#ffffff',
+                nodeExternalIndirect: '#666666',
+                nodeExternalIndirectText: '#ffffff',
+                nodeHover: '#ffff00',
+                nodeHoverText: '#000000',
+                edgeLine: '#666666',
+                edgeArrow: '#333333',
+                cyBackground: '#ffffff',
+                textOutlineDark: '#000000',
+                textOutlineLight: '#ffffff'
+            },
+            'dracula': {
+                // Official Dracula color palette
+                nodeRoot: '#ff5555',           // Dracula Red
+                nodeRootText: '#282a36',       // Dracula Background (dark on light red)
+                nodeClickable: '#ffb86c',      // Dracula Orange
+                nodeClickableText: '#282a36',  // Dark text on orange
+                nodeRegular: '#8be9fd',        // Dracula Cyan
+                nodeRegularText: '#282a36',    // Dark text on cyan
+                nodeClass: '#bd93f9',          // Dracula Purple
+                nodeClassText: '#282a36',      // Dark text on purple
+                nodeFunction: '#50fa7b',       // Dracula Green
+                nodeFunctionText: '#282a36',   // Dark text on green
+                nodeMethod: '#ff5555',         // Dracula Red
+                nodeMethodText: '#282a36',     // Dark text on red
+                nodeExternalDirect: '#6272a4', // Dracula Comment (blue-gray)
+                nodeExternalDirectText: '#f8f8f2', // Light text on dark
+                nodeExternalIndirect: '#44475a', // Dracula Current Line
+                nodeExternalIndirectText: '#f8f8f2', // Light text on dark
+                nodeHover: '#f1fa8c',          // Dracula Yellow
+                nodeHoverText: '#282a36',      // Dark text on yellow
+                edgeLine: '#6272a4',           // Dracula Comment
+                edgeArrow: '#44475a',          // Dracula Current Line
+                cyBackground: '#282a36',       // Dracula Background
+                textOutlineDark: '#282a36',    // Dark outline (background color)
+                textOutlineLight: '#f8f8f2'    // Light outline (foreground color)
+            },
+            'nord': {
+                // Nord - Arctic, north-bluish color palette
+                nodeRoot: '#bf616a',           // Nord Aurora Red
+                nodeRootText: '#2e3440',       // Dark text on red
+                nodeClickable: '#d08770',      // Nord Aurora Orange
+                nodeClickableText: '#2e3440',  // Dark text on orange
+                nodeRegular: '#5e81ac',        // Nord Frost Blue
+                nodeRegularText: '#eceff4',    // Light text on blue
+                nodeClass: '#b48ead',          // Nord Aurora Purple
+                nodeClassText: '#2e3440',      // Dark text on purple
+                nodeFunction: '#a3be8c',       // Nord Aurora Green
+                nodeFunctionText: '#2e3440',   // Dark text on green
+                nodeMethod: '#bf616a',         // Nord Aurora Red
+                nodeMethodText: '#2e3440',     // Dark text on red
+                nodeExternalDirect: '#4c566a', // Nord Polar Night
+                nodeExternalDirectText: '#eceff4', // Light text on dark
+                nodeExternalIndirect: '#3b4252', // Nord Polar Night
+                nodeExternalIndirectText: '#eceff4', // Light text on dark
+                nodeHover: '#ebcb8b',          // Nord Aurora Yellow
+                nodeHoverText: '#2e3440',      // Dark text on yellow
+                edgeLine: '#4c566a',           // Nord Polar Night
+                edgeArrow: '#434c5e',          // Nord Polar Night
+                cyBackground: '#2e3440',       // Nord Background
+                textOutlineDark: '#2e3440',    // Dark outline
+                textOutlineLight: '#eceff4'    // Light outline
+            },
+            'solarized-dark': {
+                // Solarized Dark - Precision colors by Ethan Schoonover
+                nodeRoot: '#dc322f',           // Solarized Red
+                nodeRootText: '#fdf6e3',       // Light text on red
+                nodeClickable: '#cb4b16',      // Solarized Orange
+                nodeClickableText: '#fdf6e3',  // Light text on orange
+                nodeRegular: '#268bd2',        // Solarized Blue
+                nodeRegularText: '#fdf6e3',    // Light text on blue
+                nodeClass: '#6c71c4',          // Solarized Violet
+                nodeClassText: '#fdf6e3',      // Light text on violet
+                nodeFunction: '#859900',       // Solarized Green
+                nodeFunctionText: '#fdf6e3',   // Light text on green
+                nodeMethod: '#dc322f',         // Solarized Red
+                nodeMethodText: '#fdf6e3',     // Light text on red
+                nodeExternalDirect: '#073642', // Solarized Base02
+                nodeExternalDirectText: '#839496', // Medium text on dark
+                nodeExternalIndirect: '#586e75', // Solarized Base01
+                nodeExternalIndirectText: '#93a1a1', // Light text on medium
+                nodeHover: '#b58900',          // Solarized Yellow
+                nodeHoverText: '#002b36',      // Dark text on yellow
+                edgeLine: '#586e75',           // Solarized Base01
+                edgeArrow: '#073642',          // Solarized Base02
+                cyBackground: '#002b36',       // Solarized Background
+                textOutlineDark: '#002b36',    // Dark outline
+                textOutlineLight: '#fdf6e3'    // Light outline
+            },
+            'solarized-light': {
+                // Solarized Light - Precision colors by Ethan Schoonover
+                nodeRoot: '#dc322f',           // Solarized Red
+                nodeRootText: '#fdf6e3',       // Light text on red
+                nodeClickable: '#cb4b16',      // Solarized Orange
+                nodeClickableText: '#fdf6e3',  // Light text on orange
+                nodeRegular: '#268bd2',        // Solarized Blue
+                nodeRegularText: '#fdf6e3',    // Light text on blue
+                nodeClass: '#6c71c4',          // Solarized Violet
+                nodeClassText: '#fdf6e3',      // Light text on violet
+                nodeFunction: '#859900',       // Solarized Green
+                nodeFunctionText: '#fdf6e3',   // Light text on green
+                nodeMethod: '#dc322f',         // Solarized Red
+                nodeMethodText: '#fdf6e3',     // Light text on red
+                nodeExternalDirect: '#93a1a1', // Solarized Base1
+                nodeExternalDirectText: '#002b36', // Dark text on light
+                nodeExternalIndirect: '#eee8d5', // Solarized Base2
+                nodeExternalIndirectText: '#002b36', // Dark text on light
+                nodeHover: '#b58900',          // Solarized Yellow
+                nodeHoverText: '#002b36',      // Dark text on yellow
+                edgeLine: '#93a1a1',           // Solarized Base1
+                edgeArrow: '#839496',          // Solarized Base0
+                cyBackground: '#fdf6e3',       // Solarized Background
+                textOutlineDark: '#002b36',    // Dark outline
+                textOutlineLight: '#fdf6e3'    // Light outline
+            },
+            'monokai': {
+                // Monokai - Classic TextMate theme
+                nodeRoot: '#f92672',           // Monokai Pink
+                nodeRootText: '#272822',       // Dark text on pink
+                nodeClickable: '#fd971f',      // Monokai Orange
+                nodeClickableText: '#272822',  // Dark text on orange
+                nodeRegular: '#66d9ef',        // Monokai Blue
+                nodeRegularText: '#272822',    // Dark text on blue
+                nodeClass: '#ae81ff',          // Monokai Purple
+                nodeClassText: '#272822',      // Dark text on purple
+                nodeFunction: '#a6e22e',       // Monokai Green
+                nodeFunctionText: '#272822',   // Dark text on green
+                nodeMethod: '#f92672',         // Monokai Pink
+                nodeMethodText: '#272822',     // Dark text on pink
+                nodeExternalDirect: '#49483e', // Monokai Dark Gray
+                nodeExternalDirectText: '#f8f8f2', // Light text on dark
+                nodeExternalIndirect: '#75715e', // Monokai Gray
+                nodeExternalIndirectText: '#f8f8f2', // Light text on gray
+                nodeHover: '#e6db74',          // Monokai Yellow
+                nodeHoverText: '#272822',      // Dark text on yellow
+                edgeLine: '#75715e',           // Monokai Gray
+                edgeArrow: '#49483e',          // Monokai Dark Gray
+                cyBackground: '#272822',       // Monokai Background
+                textOutlineDark: '#272822',    // Dark outline
+                textOutlineLight: '#f8f8f2'    // Light outline
+            },
+            'one-dark': {
+                // One Dark - Atom's iconic theme
+                nodeRoot: '#e06c75',           // One Dark Red
+                nodeRootText: '#282c34',       // Dark text on red
+                nodeClickable: '#d19a66',      // One Dark Orange
+                nodeClickableText: '#282c34',  // Dark text on orange
+                nodeRegular: '#61afef',        // One Dark Blue
+                nodeRegularText: '#282c34',    // Dark text on blue
+                nodeClass: '#c678dd',          // One Dark Purple
+                nodeClassText: '#282c34',      // Dark text on purple
+                nodeFunction: '#98c379',       // One Dark Green
+                nodeFunctionText: '#282c34',   // Dark text on green
+                nodeMethod: '#e06c75',         // One Dark Red
+                nodeMethodText: '#282c34',     // Dark text on red
+                nodeExternalDirect: '#3e4451', // One Dark Gray
+                nodeExternalDirectText: '#abb2bf', // Light text on dark
+                nodeExternalIndirect: '#21252b', // One Dark Darker
+                nodeExternalIndirectText: '#abb2bf', // Light text on dark
+                nodeHover: '#e5c07b',          // One Dark Yellow
+                nodeHoverText: '#282c34',      // Dark text on yellow
+                edgeLine: '#5c6370',           // One Dark Comment
+                edgeArrow: '#3e4451',          // One Dark Gray
+                cyBackground: '#282c34',       // One Dark Background
+                textOutlineDark: '#282c34',    // Dark outline
+                textOutlineLight: '#abb2bf'    // Light outline
+            },
+            'gruvbox': {
+                // Gruvbox Dark - Retro groove colors
+                nodeRoot: '#fb4934',           // Gruvbox Bright Red
+                nodeRootText: '#282828',       // Dark text on red
+                nodeClickable: '#fe8019',      // Gruvbox Bright Orange
+                nodeClickableText: '#282828',  // Dark text on orange
+                nodeRegular: '#83a598',        // Gruvbox Bright Blue
+                nodeRegularText: '#282828',    // Dark text on blue
+                nodeClass: '#d3869b',          // Gruvbox Bright Purple
+                nodeClassText: '#282828',      // Dark text on purple
+                nodeFunction: '#b8bb26',       // Gruvbox Bright Green
+                nodeFunctionText: '#282828',   // Dark text on green
+                nodeMethod: '#fb4934',         // Gruvbox Bright Red
+                nodeMethodText: '#282828',     // Dark text on red
+                nodeExternalDirect: '#504945', // Gruvbox Dark Gray
+                nodeExternalDirectText: '#ebdbb2', // Light text on dark
+                nodeExternalIndirect: '#3c3836', // Gruvbox Darker
+                nodeExternalIndirectText: '#ebdbb2', // Light text on dark
+                nodeHover: '#fabd2f',          // Gruvbox Bright Yellow
+                nodeHoverText: '#282828',      // Dark text on yellow
+                edgeLine: '#665c54',           // Gruvbox Gray
+                edgeArrow: '#504945',          // Gruvbox Dark Gray
+                cyBackground: '#282828',       // Gruvbox Background
+                textOutlineDark: '#282828',    // Dark outline
+                textOutlineLight: '#ebdbb2'    // Light outline
+            },
+            'tokyo-night': {
+                // Tokyo Night - Clean, elegant dark theme
+                nodeRoot: '#f7768e',           // Tokyo Night Red
+                nodeRootText: '#1a1b26',       // Dark text on red
+                nodeClickable: '#ff9e64',      // Tokyo Night Orange
+                nodeClickableText: '#1a1b26',  // Dark text on orange
+                nodeRegular: '#7aa2f7',        // Tokyo Night Blue
+                nodeRegularText: '#1a1b26',    // Dark text on blue
+                nodeClass: '#bb9af7',          // Tokyo Night Purple
+                nodeClassText: '#1a1b26',      // Dark text on purple
+                nodeFunction: '#9ece6a',       // Tokyo Night Green
+                nodeFunctionText: '#1a1b26',   // Dark text on green
+                nodeMethod: '#f7768e',         // Tokyo Night Red
+                nodeMethodText: '#1a1b26',     // Dark text on red
+                nodeExternalDirect: '#414868', // Tokyo Night Dark
+                nodeExternalDirectText: '#c0caf5', // Light text on dark
+                nodeExternalIndirect: '#24283b', // Tokyo Night Darker
+                nodeExternalIndirectText: '#c0caf5', // Light text on dark
+                nodeHover: '#e0af68',          // Tokyo Night Yellow
+                nodeHoverText: '#1a1b26',      // Dark text on yellow
+                edgeLine: '#565f89',           // Tokyo Night Comment
+                edgeArrow: '#414868',          // Tokyo Night Dark
+                cyBackground: '#1a1b26',       // Tokyo Night Background
+                textOutlineDark: '#1a1b26',    // Dark outline
+                textOutlineLight: '#c0caf5'    // Light outline
+            }
+        };
+
+        // Theme state
+        let currentTheme = localStorage.getItem('codezoom_theme') || 'light';
+
         // Navigation state
         let currentNode = ROOT;
         const history = [ROOT];
@@ -155,9 +685,50 @@
 
         function applyNodeColors() {
             if (!cy) return;
+            const colors = themes[currentTheme];
+
+            // Helper to determine if a color is light or dark
+            function isLightColor(color) {
+                // Simple check: if it's white, #fff, or starts with #f, #e, #d, #c, #b, #a, #9, #8
+                if (!color) return false;
+                const hex = color.replace('#', '');
+                if (hex.length === 3) {
+                    const r = parseInt(hex[0] + hex[0], 16);
+                    const g = parseInt(hex[1] + hex[1], 16);
+                    const b = parseInt(hex[2] + hex[2], 16);
+                    return (r + g + b) / 3 > 127;
+                }
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                return (r + g + b) / 3 > 127;
+            }
+
             cy.nodes().forEach(node => {
                 const d = node.data();
-                if (d.bgColor) node.style('background-color', d.bgColor);
+                const type = d.nodeType || 'regular'; // Default to regular
+
+                // Simple type-to-color mapping
+                const colorMap = {
+                    'root': [colors.nodeRoot, colors.nodeRootText],
+                    'clickable': [colors.nodeClickable, colors.nodeClickableText],
+                    'regular': [colors.nodeRegular, colors.nodeRegularText],
+                    'class': [colors.nodeClass, colors.nodeClassText],
+                    'function': [colors.nodeFunction, colors.nodeFunctionText],
+                    'method': [colors.nodeMethod, colors.nodeMethodText],
+                    'external-direct': [colors.nodeExternalDirect, colors.nodeExternalDirectText],
+                    'external-indirect': [colors.nodeExternalIndirect, colors.nodeExternalIndirectText],
+                };
+
+                const [bgColor, textColor] = colorMap[type] || [colors.nodeRegular, colors.nodeRegularText];
+
+                // Choose outline color based on text color brightness
+                const outlineColor = isLightColor(textColor) ? colors.textOutlineDark : colors.textOutlineLight;
+
+                node.style('background-color', bgColor);
+                node.style('color', textColor);
+                node.style('text-outline-color', outlineColor);
+
                 if (d.borderWidth) node.style('border-width', d.borderWidth);
                 if (d.borderColor) node.style('border-color', d.borderColor);
             });
@@ -165,6 +736,8 @@
 
         function initCytoscape() {
             if (cy) cy.destroy();
+
+            const colors = themes[currentTheme];
 
             cy = cytoscape({
                 container: document.getElementById('cy'),
@@ -178,15 +751,16 @@
                             'height': 50,
                             'padding': '5px',
                             'text-opacity': 1,
-                            'color': '#222222',
                             'font-size': '12px',
                             'font-weight': 'bold',
                             'text-valign': 'center',
                             'text-halign': 'center',
-                            'background-color': '#3498db',
+                            'background-color': colors.nodeRegular,
                             'border-width': 2,
                             'border-color': '#2980b9',
                             'background-opacity': 0.9,
+                            'text-outline-width': 1.5,
+                            'text-outline-color': colors.textOutlineDark,
                         }
                     },
                     {
@@ -194,10 +768,10 @@
                         style: {
                             'curve-style': 'bezier',
                             'target-arrow-shape': 'triangle',
-                            'target-arrow-color': '#666',
+                            'target-arrow-color': colors.edgeArrow,
                             'target-arrow-fill': 'filled',
                             'arrow-scale': 1.5,
-                            'line-color': '#95a5a6',
+                            'line-color': colors.edgeLine,
                             'width': 2,
                             'opacity': 0.7,
                         }
@@ -205,7 +779,8 @@
                     {
                         selector: 'node:hover',
                         style: {
-                            'background-color': '#f1c40f',
+                            'background-color': colors.nodeHover,
+                            'color': colors.nodeHoverText,
                             'border-color': '#d68910',
                         }
                     },
@@ -279,7 +854,7 @@
                         data: {
                             id: 'py-dep-' + dep,
                             label: dep,
-                            bgColor: isDirect ? '#34495e' : '#95a5a6',
+                            nodeType: isDirect ? 'external-direct' : 'external-indirect',
                             borderWidth: isDirect ? 2 : 1,
                             borderColor: isDirect ? '#2c3e50' : '#7f8c8d',
                         }
@@ -313,7 +888,7 @@
                     data: {
                         id: ROOT,
                         label: data.project_name,
-                        bgColor: '#e74c3c',
+                        nodeType: 'root',
                         borderWidth: 3,
                         borderColor: '#c0392b',
                     }
@@ -348,7 +923,7 @@
                         data: {
                             id: childId,
                             label: childId.split('.').pop(),
-                            bgColor: isClickable ? '#f39c12' : '#3498db',
+                            nodeType: isClickable ? 'clickable' : 'regular',
                             borderWidth: isClickable ? 3 : 2,
                             borderColor: isClickable ? '#d68910' : '#2980b9',
                         }
@@ -381,7 +956,7 @@
                         data: {
                             id: nodeFullId,
                             label: name,
-                            bgColor: info.type === 'class' ? '#9b59b6' : '#16a085',
+                            nodeType: info.type === 'class' ? 'class' : 'function',
                             borderWidth: hasMethodsOrCalls ? 3 : 2,
                             borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                             hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
@@ -419,14 +994,13 @@
 
             Object.entries(functions).forEach(([name, info]) => {
                 const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0) || (info.calls && info.calls.length > 0);
-                let bgColor = info.type === 'class' ? '#9b59b6' : '#16a085';
                 let borderWidth = hasMethodsOrCalls ? 3 : 2;
 
                 elements.push({
                     data: {
                         id: moduleId + ':' + name,
                         label: name,
-                        bgColor: bgColor,
+                        nodeType: info.type === 'class' ? 'class' : 'function',
                         borderWidth: borderWidth,
                         borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                         hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
@@ -493,7 +1067,7 @@
                     data: {
                         id: moduleId + ':' + className + '.' + methodName,
                         label: methodName,
-                        bgColor: '#e74c3c',
+                        nodeType: 'method',
                         borderWidth: 2,
                         borderColor: '#c0392b',
                     }
@@ -578,6 +1152,58 @@
             }
         }
 
+        function applyTheme(theme) {
+            // Validate theme exists
+            if (!themes[theme]) {
+                console.warn(`Theme "${theme}" not found, falling back to light`);
+                theme = 'light';
+            }
+
+            currentTheme = theme;
+
+            // Update body class for CSS variables
+            document.body.className = ''; // Clear all theme classes
+            if (theme !== 'light') {
+                document.body.classList.add(theme + '-theme');
+            }
+
+            // Update Cytoscape colors if graph exists
+            if (cy) {
+                const colors = themes[theme];
+
+                // Update container background
+                document.getElementById('cy').style.background = colors.cyBackground;
+
+                // Update default edge styles
+                cy.style()
+                    .selector('edge').style({
+                        'line-color': colors.edgeLine,
+                        'target-arrow-color': colors.edgeArrow
+                    })
+                    .selector('node:hover').style({
+                        'background-color': colors.nodeHover,
+                        'color': colors.nodeHoverText
+                    })
+                    .update();
+
+                // Reapply node-specific colors (this handles text colors too)
+                applyNodeColors();
+            }
+
+            // Update dropdown selection
+            const selector = document.getElementById('themeSelector');
+            if (selector) {
+                selector.value = theme;
+            }
+
+            // Persist to localStorage
+            localStorage.setItem('codezoom_theme', theme);
+        }
+
+        function changeTheme(theme) {
+            applyTheme(theme);
+        }
+
         // Node size slider
         const sizeSlider = document.getElementById('sizeSlider');
         const sizeValue = document.getElementById('sizeValue');
@@ -602,6 +1228,9 @@
                 cy.nodes().style('font-size', newFontSize + 'px');
             }
         });
+
+        // Apply saved theme on page load (before Cytoscape initialization)
+        applyTheme(currentTheme);
 
         // Initialize
         updateUI();

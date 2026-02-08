@@ -21,6 +21,8 @@ def _symbol_to_dict(sym: SymbolData) -> dict:
         d["inherits"] = sym.inherits
     if sym.children:
         d["methods"] = {k: _symbol_to_dict(v) for k, v in sym.children.items()}
+    if sym.visibility is not None:
+        d["visibility"] = sym.visibility
     return d
 
 
@@ -37,6 +39,8 @@ def _graph_to_json(graph: ProjectGraph) -> str:
         }
         if node.class_deps:
             entry["class_deps"] = node.class_deps
+        if not node.is_exported:
+            entry["is_exported"] = False
         hierarchy[node_id] = entry
         if node.symbols:
             function_data[node_id] = {

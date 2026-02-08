@@ -15,6 +15,7 @@ class SymbolData:
     calls: list[str] = field(default_factory=list)
     inherits: list[str] = field(default_factory=list)
     children: dict[str, SymbolData] = field(default_factory=dict)
+    visibility: str | None = None  # "public", "protected", "package", "private"
 
 
 @dataclass
@@ -26,6 +27,7 @@ class NodeData:
     imports_from: list[str] = field(default_factory=list)
     symbols: dict[str, SymbolData] | None = None
     class_deps: dict[str, list[str]] | None = None
+    is_exported: bool = True  # For Java: whether package is exported in module-info.java
 
 
 @dataclass

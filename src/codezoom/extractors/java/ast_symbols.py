@@ -103,6 +103,9 @@ def _extract_type(node, source: bytes) -> SymbolData | None:
     name = name_node.text.decode("utf-8")
     line = node.start_point[0] + 1  # 1-indexed
 
+    # Extract visibility modifier
+    visibility = _extract_visibility(node)
+
     # Extract superclass and interfaces.
     inherits: list[str] = []
 
@@ -135,6 +138,7 @@ def _extract_type(node, source: bytes) -> SymbolData | None:
         line=line,
         inherits=inherits,
         children=methods,
+        visibility=visibility,
     )
 
 
@@ -147,6 +151,9 @@ def _extract_method(node, source: bytes) -> SymbolData | None:
     name = name_node.text.decode("utf-8")
     line = node.start_point[0] + 1
 
+    # Extract visibility modifier
+    visibility = _extract_visibility(node)
+
     # Collect method invocations within the method body.
     calls: set[str] = set()
     body = node.child_by_field_name("body")
@@ -158,6 +165,7 @@ def _extract_method(node, source: bytes) -> SymbolData | None:
         kind="method",
         line=line,
         calls=sorted(calls),
+        visibility=visibility,
     )
 
 
@@ -169,3 +177,25 @@ def _collect_calls(node, calls: set[str]) -> None:
             calls.add(name_node.text.decode("utf-8"))
     for child in node.children:
         _collect_calls(child, calls)
+
+
+def _extract_visibility(node) -> str:
+    """
+    Extract visibility modifier from a type or method declaration.
+    Returns: "public", "protected", "private", or "package" (package-private).
+    """
+    # Look for modifiers node
+    modifiers = node.child_by_field_name("modifiers")
+    if modifiers is None:
+        return "package"  # Default is package-private in Java
+
+    # Check for visibility modifiers
+    for child in modifiers.children:
+        if child.type == "public":
+            return "public"
+        elif child.type == "protected":
+            return "protected"
+        elif child.type == "private":
+            return "private"
+
+    return "package"  # No explicit visibility modifier = package-private

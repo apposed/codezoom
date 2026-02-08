@@ -257,13 +257,13 @@
         }
 
         button {
-            padding: 8px 16px;
+            padding: 8px 8px;
             background: var(--button-bg);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         button:hover {
@@ -320,7 +320,7 @@
 
         .theme-label {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 16px;
             margin-left: 20px;
         }
     </style>
@@ -336,13 +336,14 @@
     </div>
 
     <div id="controls">
-        <button id="backBtn" onclick="goBack()">&#8592; Back</button>
-        <button id="resetBtn" onclick="reset()">Reset to Top</button>
-        <button onclick="applyLayout('dagre', 'cose')">Layout: Hierarchical</button>
-        <button onclick="applyLayout('cose')">Layout: Force-Directed</button>
-        <button onclick="cy.fit()">Fit View</button>
-        <label for="themeSelector" class="theme-label">Theme:</label>
-        <select id="themeSelector" onchange="changeTheme(this.value)">
+        <button id="backBtn" onclick="goBack()" title="Go back one level">&#x2b05;</button>
+        <button id="resetBtn" onclick="reset()" title="Reset to top">&#x1f3e0;</button>
+        <button onclick="applyLayout('dagre', 'cose')" title="Hierarchical layout">&#x2935;&#xfe0f;</button>
+        <button onclick="applyLayout('cose')" title="Force-directed layout">&#x2b50;</button>
+        <button onclick="cy.fit()" title="Fit view">&#x1f50d;</button>
+
+        <label for="themeSelector" class="theme-label">&#x1f3a8;</label>
+        <select id="themeSelector" onchange="changeTheme(this.value)" title="Theme">
             <option value="light">Light</option>
             <option value="dark">Dark</option>
             <option value="dracula">Dracula</option>
@@ -355,18 +356,52 @@
             <option value="tokyo-night">Tokyo Night</option>
             <option value="high-contrast">High Contrast</option>
         </select>
-        <div style="flex: 1; display: flex; align-items: center; gap: 20px; margin-left: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="sizeSlider" style="color: var(--text-secondary); font-size: 14px;">Node Size:</label>
-                <input type="range" id="sizeSlider" min="20" max="100" value="50" style="width: 120px;">
-                <span id="sizeValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">50</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="fontSlider" style="color: var(--text-secondary); font-size: 14px;">Font Size:</label>
-                <input type="range" id="fontSlider" min="8" max="40" value="12" style="width: 120px;">
-                <span id="fontValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">12</span>
-            </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;" title="Node size">
+            <label for="sizeSlider" style="color: var(--text-secondary); font-size: 16px;">&#x1f7e0;</label>
+            <input type="range" id="sizeSlider" min="20" max="100" value="50" style="width: 120px;">
+            <span id="sizeValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">50</span>
         </div>
+        <div style="display: flex; align-items: center; gap: 10px;" title="Font size">
+            <label for="fontSlider" style="color: var(--text-secondary); font-size: 16px;">&#x1f5da;</label>
+            <input type="range" id="fontSlider" min="8" max="40" value="12" style="width: 120px;">
+            <span id="fontValue" style="color: var(--text-secondary); font-size: 14px; min-width: 30px;">12</span>
+        </div>
+
+        <!-- Visibility checkboxes -->
+        <div style="display: flex; align-items: center; gap: 15px; margin-left: 20px; padding: 5px 10px; border: 1px solid var(--border-color); border-radius: 4px;" title="Visibility filters">
+            <span style="color: var(--text-secondary); font-size: 14px; font-weight: bold;">&#x1f441;&#xfe0f; Visibility:</span>
+
+            <!-- Dependency visibility (shown only at top level) -->
+            <label id="vis-direct-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-direct" checked> Direct
+            </label>
+            <label id="vis-transitive-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-transitive" checked> Transitive
+            </label>
+
+            <!-- Code visibility (shown at package/class levels) -->
+            <label id="vis-public-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-public" checked> Public
+            </label>
+            <label id="vis-protected-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-protected" checked> Protected
+            </label>
+            <label id="vis-package-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-package" checked> Package
+            </label>
+            <label id="vis-private-label" style="color: var(--text-secondary); font-size: 14px; display: none;">
+                <input type="checkbox" id="vis-private" checked> Private
+            </label>
+        </div>
+
+        <!-- Hide controls -->
+        <label style="color: var(--text-secondary); font-size: 14px; margin-left: 20px;">
+            <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
+            Show hidden nodes
+        </label>
+        <button onclick="unhideAll()">Unhide All</button>
+
         <div id="breadcrumb"></div>
     </div>
 
@@ -681,6 +716,9 @@
         let currentNode = ROOT;
         const history = [ROOT];
 
+        // Hidden nodes tracking
+        const userHiddenNodes = new Set();
+
         let cy = null;
 
         function applyNodeColors() {
@@ -824,8 +862,29 @@
                 }
             });
 
+            // Right-click to hide/unhide nodes
+            cy.on('cxttap', 'node', function(evt) {
+                const node = evt.target;
+                const nodeId = node.id();
+
+                if (userHiddenNodes.has(nodeId)) {
+                    // Unhide
+                    userHiddenNodes.delete(nodeId);
+                    node.removeClass('user-hidden');
+                    node.style('display', 'element');
+                    node.style('opacity', 1);
+                    node.style('border-style', 'solid');
+                } else {
+                    // Hide
+                    userHiddenNodes.add(nodeId);
+                    node.addClass('user-hidden');
+                    updateHiddenDisplay();
+                }
+            });
+
             setTimeout(() => {
                 applyNodeColors();
+                applyVisibilityFilter();  // Apply filter after layout
                 cy.fit();
             }, 100);
         }
@@ -1113,10 +1172,219 @@
             updateUI();
         }
 
+        function updateHiddenDisplay() {
+            if (!cy) return;
+            const showHidden = document.getElementById('showHidden').checked;
+
+            cy.nodes('.user-hidden').forEach(node => {
+                if (showHidden) {
+                    // Translucent mode - show hidden nodes with visual indication
+                    node.style('display', 'element');
+                    node.style('opacity', 0.3);
+                    node.style('border-style', 'dashed');
+                } else {
+                    // Completely hidden
+                    node.style('display', 'none');
+                }
+            });
+        }
+
+        function toggleHiddenDisplay(showHidden) {
+            updateHiddenDisplay();
+            // Reapply visibility filter after toggling hidden display
+            applyVisibilityFilter();
+        }
+
+        function unhideAll() {
+            userHiddenNodes.clear();
+            if (cy) {
+                cy.nodes('.user-hidden').forEach(node => {
+                    node.removeClass('user-hidden');
+                    node.style('display', 'element');
+                    node.style('opacity', 1);
+                    node.style('border-style', 'solid');
+                });
+            }
+        }
+
+        function getZoomContext() {
+            // Determine what level we're viewing
+            if (currentNode === ROOT && history.length === 1 && pythonDeps.length > 0) {
+                return 'dependencies';
+            } else if (currentNode.includes(':')) {
+                // At class or method level
+                const lastColonIdx = currentNode.lastIndexOf(':');
+                const classPath = currentNode.substring(lastColonIdx + 1);
+                if (classPath.includes('.')) {
+                    return 'methods';  // Viewing methods of a class
+                } else {
+                    return 'members';  // Viewing members (could be methods or classes)
+                }
+            } else {
+                return 'packages';  // Viewing packages/modules
+            }
+        }
+
+        function detectLanguageFeatures() {
+            // Detect which visibility levels are actually used in the project
+            const usedVisibilities = new Set();
+
+            // Check all symbols in functionData
+            for (const moduleId in functionData) {
+                const symbols = functionData[moduleId];
+                for (const symbolName in symbols) {
+                    const symbol = symbols[symbolName];
+                    if (symbol.visibility) {
+                        usedVisibilities.add(symbol.visibility);
+                    }
+                    // Check methods too
+                    if (symbol.methods) {
+                        for (const methodName in symbol.methods) {
+                            const method = symbol.methods[methodName];
+                            if (method.visibility) {
+                                usedVisibilities.add(method.visibility);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                hasProtected: usedVisibilities.has('protected'),
+                hasPackage: usedVisibilities.has('package'),
+            };
+        }
+
+        function updateVisibilityCheckboxes() {
+            const context = getZoomContext();
+            const languageFeatures = detectLanguageFeatures();
+
+            // Hide all checkboxes first
+            document.getElementById('vis-direct-label').style.display = 'none';
+            document.getElementById('vis-transitive-label').style.display = 'none';
+            document.getElementById('vis-public-label').style.display = 'none';
+            document.getElementById('vis-protected-label').style.display = 'none';
+            document.getElementById('vis-package-label').style.display = 'none';
+            document.getElementById('vis-private-label').style.display = 'none';
+
+            // Show relevant checkboxes based on context
+            if (context === 'dependencies') {
+                document.getElementById('vis-direct-label').style.display = 'inline';
+                document.getElementById('vis-transitive-label').style.display = 'inline';
+            } else {
+                // Package/class/method views - show code visibility
+                document.getElementById('vis-public-label').style.display = 'inline';
+
+                // Only show protected/package if they're actually used in the project
+                if (languageFeatures.hasProtected) {
+                    document.getElementById('vis-protected-label').style.display = 'inline';
+                }
+                if (languageFeatures.hasPackage) {
+                    document.getElementById('vis-package-label').style.display = 'inline';
+                }
+
+                document.getElementById('vis-private-label').style.display = 'inline';
+            }
+        }
+
+        function shouldShowNode(node, context) {
+            const nodeId = node.id();
+            const nodeData = node.data();
+
+            // Dependencies context
+            if (context === 'dependencies') {
+                if (nodeId.startsWith('ext-dep-')) {
+                    const depName = nodeId.substring(8);  // Remove 'ext-dep-' prefix
+                    const isDirect = pythonDepsDirect.includes(depName);
+
+                    // Check visibility checkboxes
+                    const showDirect = document.getElementById('vis-direct').checked;
+                    const showTransitive = document.getElementById('vis-transitive').checked;
+
+                    if (isDirect && !showDirect) return false;
+                    if (!isDirect && !showTransitive) return false;
+                }
+                return true;  // Show project root
+            }
+
+            // Get visibility checkbox states
+            const showPublic = document.getElementById('vis-public').checked;
+            const showProtected = document.getElementById('vis-protected').checked;
+            const showPackage = document.getElementById('vis-package').checked;
+            const showPrivate = document.getElementById('vis-private').checked;
+
+            // Check symbol visibility for classes/methods
+            if (nodeId.includes(':')) {
+                const lastColonIdx = nodeId.lastIndexOf(':');
+                const moduleId = nodeId.substring(0, lastColonIdx);
+                const symbolPath = nodeId.substring(lastColonIdx + 1);
+
+                // Extract visibility from function data
+                let visibility = null;
+                if (functionData[moduleId]) {
+                    if (symbolPath.includes('.')) {
+                        // Method: className.methodName
+                        const [className, methodName] = symbolPath.split('.');
+                        if (functionData[moduleId][className] &&
+                            functionData[moduleId][className].methods &&
+                            functionData[moduleId][className].methods[methodName]) {
+                            visibility = functionData[moduleId][className].methods[methodName].visibility;
+                        }
+                    } else {
+                        // Class or function
+                        if (functionData[moduleId][symbolPath]) {
+                            visibility = functionData[moduleId][symbolPath].visibility;
+                        }
+                    }
+                }
+
+                if (visibility) {
+                    // Filter based on visibility checkboxes
+                    if (visibility === 'public' && !showPublic) return false;
+                    if (visibility === 'protected' && !showProtected) return false;
+                    if (visibility === 'package' && !showPackage) return false;
+                    if (visibility === 'private' && !showPrivate) return false;
+                }
+            }
+
+            // Module/package visibility - check if exported
+            // (is_exported is set by language-specific extractors)
+            if (!nodeId.includes(':') && hierarchy[nodeId]) {
+                const isExported = hierarchy[nodeId].is_exported !== false;
+                if (!isExported && !showPrivate) {
+                    return false;  // Hide internal/private packages if private is unchecked
+                }
+            }
+
+            return true;
+        }
+
+        function applyVisibilityFilter() {
+            if (!cy) return;
+
+            const context = getZoomContext();
+
+            // Update which checkboxes are shown
+            updateVisibilityCheckboxes();
+
+            // Apply filter
+            cy.nodes().forEach(node => {
+                // Skip user-hidden nodes (they're handled separately)
+                if (node.hasClass('user-hidden')) return;
+
+                if (shouldShowNode(node, context)) {
+                    node.style('display', 'element');
+                } else {
+                    node.style('display', 'none');
+                }
+            });
+        }
+
         function updateUI() {
             updateBreadcrumb();
             updateBackButton();
             initCytoscape();
+            // applyVisibilityFilter is now called inside initCytoscape's setTimeout
         }
 
         function updateBreadcrumb() {
@@ -1228,6 +1496,18 @@
             if (cy) {
                 cy.nodes().style('font-size', newFontSize + 'px');
             }
+        });
+
+        // Visibility checkboxes
+        const visibilityCheckboxes = [
+            'vis-direct', 'vis-transitive',
+            'vis-public', 'vis-protected', 'vis-package', 'vis-private'
+        ];
+        visibilityCheckboxes.forEach(id => {
+            const checkbox = document.getElementById(id);
+            checkbox.addEventListener('change', function() {
+                applyVisibilityFilter();
+            });
         });
 
         // Apply saved theme on page load (before Cytoscape initialization)

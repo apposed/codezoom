@@ -30,6 +30,9 @@ class AstSymbolsExtractor:
 
             symbols = _extract_symbols(py_file)
             if symbols:
+                # Ensure parent packages exist in hierarchy
+                _ensure_parents_exist(graph, module_name)
+
                 node = graph.hierarchy.get(module_name)
                 if node is None:
                     node = NodeData()
@@ -47,6 +50,35 @@ def _find_source_dir(project_dir: Path, root_node_id: str) -> Path | None:
     return None
 
 
+def _ensure_parents_exist(graph: ProjectGraph, module_name: str) -> None:
+    """Ensure all parent packages exist and children relationships are set up."""
+    parts = module_name.split(".")
+    root_id = graph.root_node_id
+
+    # Build intermediate package nodes
+    for i in range(1, len(parts)):
+        parent_name = ".".join(parts[:i]) if i > 1 else root_id
+        child_name = ".".join(parts[: i + 1])
+
+        # Ensure parent exists
+        if parent_name not in graph.hierarchy:
+            graph.hierarchy[parent_name] = NodeData()
+
+        # Ensure child exists
+        if child_name not in graph.hierarchy:
+            # Check if module/package is private based on naming convention
+            child_parts = child_name.split(".")
+            last_part = child_parts[-1]
+            is_exported = not last_part.startswith("_")
+
+            graph.hierarchy[child_name] = NodeData(is_exported=is_exported)
+
+        # Add child to parent's children list
+        parent_node = graph.hierarchy[parent_name]
+        if child_name not in parent_node.children:
+            parent_node.children.append(child_name)
+
+
 class _CallExtractor(ast.NodeVisitor):
     """Collect names called within a function/method body."""
 
@@ -60,6 +92,23 @@ class _CallExtractor(ast.NodeVisitor):
             if isinstance(node.func.value, ast.Name):
                 self.called_names.add(node.func.attr)
         self.generic_visit(node)
+
+
+def _get_python_visibility(name: str) -> str:
+    """
+    Determine visibility based on Python naming conventions.
+    Python only has two levels: public and private (by convention).
+
+    __dunder__ -> "public" (special methods are part of the public API)
+    __private or _private -> "private" (internal use)
+    public -> "public"
+    """
+    if name.startswith("__") and name.endswith("__"):
+        return "public"  # Special methods like __init__ are part of the public API
+    elif name.startswith("_"):
+        return "private"  # Both _weak and __strong are private by convention
+    else:
+        return "public"
 
 
 def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
@@ -80,6 +129,7 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                 kind="function",
                 line=node.lineno,
                 calls=sorted(ext.called_names),
+                visibility=_get_python_visibility(node.name),
             )
 
         elif isinstance(node, ast.ClassDef):
@@ -100,6 +150,7 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                         kind="method",
                         line=item.lineno,
                         calls=sorted(ext.called_names),
+                        visibility=_get_python_visibility(item.name),
                     )
 
             # Class-level calls (decorators, class-var assignments, etc.)
@@ -115,6 +166,7 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                 calls=sorted(ext.called_names),
                 inherits=bases,
                 children=methods,
+                visibility=_get_python_visibility(node.name),
             )
 
     return results or None

@@ -825,6 +825,19 @@
 
         let cy = null;
 
+        function getBorderStyleForVisibility(visibility) {
+            // Map visibility to border style (UML convention)
+            // public: solid, protected: dotted, package: double, private: dashed
+            if (!visibility) return 'solid';  // Default to solid
+            switch (visibility) {
+                case 'public': return 'solid';
+                case 'protected': return 'dotted';
+                case 'package': return 'double';
+                case 'private': return 'dashed';
+                default: return 'solid';
+            }
+        }
+
         function applyNodeColors() {
             if (!cy) return;
             const colors = themes[currentTheme];
@@ -873,6 +886,10 @@
 
                 if (d.borderWidth) node.style('border-width', d.borderWidth);
                 if (d.borderColor) node.style('border-color', d.borderColor);
+
+                // Apply border style based on visibility
+                const borderStyle = getBorderStyleForVisibility(d.visibility);
+                node.style('border-style', borderStyle);
             });
         }
 
@@ -977,7 +994,6 @@
                     node.removeClass('user-hidden');
                     node.style('display', 'element');
                     node.style('opacity', 1);
-                    node.style('border-style', 'solid');
                 } else {
                     // Hide
                     userHiddenNodes.add(nodeId);
@@ -1124,6 +1140,7 @@
                             borderWidth: hasMethodsOrCalls ? 3 : 2,
                             borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                             hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
+                            visibility: info.visibility || null,
                         }
                     });
                 });
@@ -1168,6 +1185,7 @@
                         borderWidth: borderWidth,
                         borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                         hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
+                        visibility: info.visibility || null,
                     }
                 });
             });
@@ -1234,6 +1252,7 @@
                         nodeType: 'method',
                         borderWidth: 2,
                         borderColor: '#c0392b',
+                        visibility: methodInfo.visibility || null,
                     }
                 });
             });
@@ -1285,7 +1304,6 @@
                     // Translucent mode - show hidden nodes with visual indication
                     node.style('display', 'element');
                     node.style('opacity', 0.3);
-                    node.style('border-style', 'dashed');
                 } else {
                     // Completely hidden
                     node.style('display', 'none');
@@ -1306,7 +1324,6 @@
                     node.removeClass('user-hidden');
                     node.style('display', 'element');
                     node.style('opacity', 1);
-                    node.style('border-style', 'solid');
                 });
             }
         }

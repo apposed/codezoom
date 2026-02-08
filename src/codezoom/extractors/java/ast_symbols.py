@@ -98,7 +98,7 @@ def _extract_symbols_from_bytecode(
     this_class_pattern = re.compile(r"^\s+this_class:\s+#\d+\s+//\s+(.+)$")
     super_class_pattern = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
     interface_pattern = re.compile(r"^\s+#\d+ = Class\s+#\d+\s+//\s+(.+)$")
-    method_decl_pattern = re.compile(r"^\s+(public |protected |private |static |final |synchronized |native |abstract |)+([^(]+)\(([^)]*)\);$")
+    method_decl_pattern = re.compile(r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$")
     descriptor_pattern = re.compile(r"^\s+descriptor:\s+(.+)$")
     flags_pattern = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
     line_number_pattern = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
@@ -209,6 +209,11 @@ def _extract_symbols_from_bytecode(
             modifiers = mdm.group(1).strip() if mdm.group(1) else ""
             method_name_part = mdm.group(2).strip().split()[-1]  # Last word is method name
             params_str = mdm.group(3).strip()
+
+            # For constructors, use simple class name (last part after dot)
+            # e.g., "foo.bar.FizzBuzz" -> "FizzBuzz"
+            if "." in method_name_part:
+                method_name_part = method_name_part.split(".")[-1]
 
             # Build method signature
             if params_str:

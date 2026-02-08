@@ -751,6 +751,7 @@
                             'height': 50,
                             'padding': '5px',
                             'text-opacity': 1,
+                            'text-wrap': 'wrap',
                             'font-size': '12px',
                             'font-weight': 'bold',
                             'text-valign': 'center',
@@ -853,7 +854,7 @@
                     elements.push({
                         data: {
                             id: 'py-dep-' + dep,
-                            label: dep,
+                            label: dep.replace(':', '\n'),
                             nodeType: isDirect ? 'external-direct' : 'external-indirect',
                             borderWidth: isDirect ? 2 : 1,
                             borderColor: isDirect ? '#2c3e50' : '#7f8c8d',

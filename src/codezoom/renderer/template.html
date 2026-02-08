@@ -853,7 +853,7 @@
                     const isDirect = pythonDepsDirect.includes(dep);
                     elements.push({
                         data: {
-                            id: 'py-dep-' + dep,
+                            id: 'ext-dep-' + dep,
                             label: dep.replace(':', '\n'),
                             nodeType: isDirect ? 'external-direct' : 'external-indirect',
                             borderWidth: isDirect ? 2 : 1,
@@ -863,9 +863,9 @@
                 });
 
                 pythonDepsDirect.forEach(dep => {
-                    const edgeId = ROOT + '->py-dep-' + dep;
+                    const edgeId = ROOT + '->ext-dep-' + dep;
                     if (!seenEdges.has(edgeId)) {
-                        elements.push({ data: { id: edgeId, source: ROOT, target: 'py-dep-' + dep } });
+                        elements.push({ data: { id: edgeId, source: ROOT, target: 'ext-dep-' + dep } });
                         seenEdges.add(edgeId);
                     }
                 });
@@ -874,9 +874,9 @@
                     if (pythonDepsGraph[dep]) {
                         pythonDepsGraph[dep].forEach(depDep => {
                             if (pythonDeps.includes(depDep)) {
-                                const edgeId = 'py-dep-' + dep + '->py-dep-' + depDep;
+                                const edgeId = 'ext-dep-' + dep + '->ext-dep-' + depDep;
                                 if (!seenEdges.has(edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: 'py-dep-' + dep, target: 'py-dep-' + depDep } });
+                                    elements.push({ data: { id: edgeId, source: 'ext-dep-' + dep, target: 'ext-dep-' + depDep } });
                                     seenEdges.add(edgeId);
                                 }
                             }

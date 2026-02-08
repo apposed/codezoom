@@ -967,14 +967,12 @@
                 if (nodeId.includes(':')) {
                     const lastColonIdx = nodeId.lastIndexOf(':');
                     const moduleId = nodeId.substring(0, lastColonIdx);
-                    const classPath = nodeId.substring(lastColonIdx + 1);
-                    const isMethodNode = classPath.includes('.');
-                    if (!isMethodNode) {
-                        const className = classPath;
-                        if (functionData[moduleId] && functionData[moduleId][className]) {
-                            const classInfo = functionData[moduleId][className];
-                            isClickableClass = classInfo.type === 'class' && classInfo.methods && Object.keys(classInfo.methods).length > 0;
-                        }
+                    const symbolPath = nodeId.substring(lastColonIdx + 1);
+
+                    // Check if this symbol is a class with children (could be inner class)
+                    const symbolInfo = findSymbol(moduleId, symbolPath);
+                    if (symbolInfo) {
+                        isClickableClass = symbolInfo.type === 'class' && symbolInfo.methods && Object.keys(symbolInfo.methods).length > 0;
                     }
                 }
 
@@ -1009,18 +1007,70 @@
             }, 100);
         }
 
+        function findSymbol(moduleId, symbolPath) {
+            // Navigate through nested classes to find a symbol
+            // symbolPath can be:
+            //  - "ClassName" (top-level class)
+            //  - "OuterClass.InnerClass" (nested class)
+            //  - "ClassName.method(args)" (method in class)
+            //  - "OuterClass.InnerClass.method(args)" (method in nested class)
+            if (!functionData[moduleId]) return null;
+
+            // First, try direct lookup (for top-level classes/functions)
+            if (functionData[moduleId][symbolPath]) {
+                return functionData[moduleId][symbolPath];
+            }
+
+            // For nested symbols, navigate through the structure
+            // Split into potential class path and member name
+            const parts = symbolPath.split('.');
+
+            // Start with the top-level class
+            let current = functionData[moduleId][parts[0]];
+            if (!current) return null;
+
+            if (parts.length === 1) return current;
+
+            // Navigate through potential nested classes and methods
+            // Try to find the longest matching qualified name first
+            for (let i = 1; i < parts.length; i++) {
+                if (!current.methods) return null;
+
+                // Try qualified name first (for inner classes like "Outer.Inner")
+                const qualifiedName = parts.slice(0, i + 1).join('.');
+                if (current.methods[qualifiedName]) {
+                    current = current.methods[qualifiedName];
+                    continue;
+                }
+
+                // Try simple name (for methods like "method()")
+                const simpleName = parts.slice(i).join('.');
+                if (current.methods[simpleName]) {
+                    return current.methods[simpleName];
+                }
+
+                return null;
+            }
+
+            return current;
+        }
+
         function buildGraphData(nodeId) {
             const elements = [];
 
-            // Method-level nodes (format: "moduleId:className")
+            // Method-level nodes (format: "moduleId:symbolPath")
+            // symbolPath can be a class, inner class, or method
             if (nodeId.includes(':')) {
                 const lastColonIdx = nodeId.lastIndexOf(':');
                 const moduleId = nodeId.substring(0, lastColonIdx);
-                const classPath = nodeId.substring(lastColonIdx + 1);
-                const className = classPath.split('.')[0];
+                const symbolPath = nodeId.substring(lastColonIdx + 1);
 
-                if (functionData[moduleId] && functionData[moduleId][className] && functionData[moduleId][className].methods) {
-                    return buildMethodGraph(moduleId, className);
+                // Find the symbol (could be nested)
+                const symbol = findSymbol(moduleId, symbolPath);
+
+                // If it's a class with methods/children, show them
+                if (symbol && symbol.type === 'class' && symbol.methods) {
+                    return buildMethodGraph(moduleId, symbolPath);
                 }
             }
 
@@ -1193,6 +1243,7 @@
             Object.entries(functions).forEach(([name, info]) => {
                 if (info.calls && info.calls.length > 0) {
                     info.calls.forEach(calledName => {
+                        // Bytecode analysis gives us exact signatures
                         if (functions[calledName]) {
                             const edgeId = moduleId + ':' + name + '->' + calledName;
                             if (!elements.find(el => el.data.id === edgeId)) {
@@ -1236,34 +1287,50 @@
             return elements;
         }
 
-        function buildMethodGraph(moduleId, className) {
+        function buildMethodGraph(moduleId, symbolPath) {
+            // symbolPath can be "ClassName" or "OuterClass.InnerClass"
             const elements = [];
-            const functions = functionData[moduleId];
-            if (!functions || !functions[className]) return elements;
 
-            const classInfo = functions[className];
+            const classInfo = findSymbol(moduleId, symbolPath);
+            if (!classInfo) return elements;
+
             const methods = classInfo.methods || {};
 
-            Object.entries(methods).forEach(([methodName, methodInfo]) => {
+            Object.entries(methods).forEach(([childName, childInfo]) => {
+                // Child can be a method or nested class
+                const fullChildName = childName.includes('.') ? childName : `${symbolPath}.${childName}`;
+
+                // For display: show just the simple name (last part after final dot)
+                let displayLabel = childName;
+                if (childInfo.type === 'class' && childName.includes('.')) {
+                    // Inner class: show just "InnerClass" not "OuterClass.InnerClass"
+                    const parts = childName.split('.');
+                    displayLabel = parts[parts.length - 1];
+                }
+
                 elements.push({
                     data: {
-                        id: moduleId + ':' + className + '.' + methodName,
-                        label: methodName,
-                        nodeType: 'method',
+                        id: moduleId + ':' + fullChildName,
+                        label: displayLabel,
+                        nodeType: childInfo.type === 'class' ? 'class' : 'method',
                         borderWidth: 2,
-                        borderColor: '#c0392b',
-                        visibility: methodInfo.visibility || null,
+                        borderColor: childInfo.type === 'class' ? '#8e44ad' : '#c0392b',
+                        visibility: childInfo.visibility || null,
+                        hasChildren: childInfo.type === 'class' && childInfo.methods && Object.keys(childInfo.methods).length > 0,
                     }
                 });
             });
 
-            Object.entries(methods).forEach(([methodName, methodInfo]) => {
-                if (methodInfo.calls && methodInfo.calls.length > 0) {
-                    methodInfo.calls.forEach(calledName => {
+            Object.entries(methods).forEach(([childName, childInfo]) => {
+                if (childInfo.calls && childInfo.calls.length > 0) {
+                    const fullChildName = childName.includes('.') ? childName : `${symbolPath}.${childName}`;
+                    childInfo.calls.forEach(calledName => {
+                        // Bytecode analysis gives us exact signatures, so just check if it exists
                         if (methods[calledName]) {
-                            const edgeId = moduleId + ':' + className + '.' + methodName + '->' + calledName;
+                            const fullCalledName = calledName.includes('.') ? calledName : `${symbolPath}.${calledName}`;
+                            const edgeId = moduleId + ':' + fullChildName + '->' + calledName;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: moduleId + ':' + className + '.' + methodName, target: moduleId + ':' + className + '.' + calledName } });
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + fullChildName, target: moduleId + ':' + fullCalledName } });
                             }
                         }
                     });
@@ -1440,24 +1507,9 @@
                 const moduleId = nodeId.substring(0, lastColonIdx);
                 const symbolPath = nodeId.substring(lastColonIdx + 1);
 
-                // Extract visibility from function data
-                let visibility = null;
-                if (functionData[moduleId]) {
-                    if (symbolPath.includes('.')) {
-                        // Method: className.methodName
-                        const [className, methodName] = symbolPath.split('.');
-                        if (functionData[moduleId][className] &&
-                            functionData[moduleId][className].methods &&
-                            functionData[moduleId][className].methods[methodName]) {
-                            visibility = functionData[moduleId][className].methods[methodName].visibility;
-                        }
-                    } else {
-                        // Class or function
-                        if (functionData[moduleId][symbolPath]) {
-                            visibility = functionData[moduleId][symbolPath].visibility;
-                        }
-                    }
-                }
+                // Extract visibility from function data (handles nested classes)
+                const symbolInfo = findSymbol(moduleId, symbolPath);
+                const visibility = symbolInfo ? symbolInfo.visibility : null;
 
                 if (visibility) {
                     // Filter based on visibility checkboxes

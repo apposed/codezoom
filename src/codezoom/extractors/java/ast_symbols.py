@@ -1,4 +1,4 @@
-"""Extract classes, interfaces, enums, and methods from Java source via tree-sitter."""
+"""Extract classes, interfaces, enums, and methods from Java bytecode via javap."""
 
 from __future__ import annotations
 
@@ -13,61 +13,35 @@ from codezoom.model import NodeData, ProjectGraph, SymbolData
 
 logger = logging.getLogger(__name__)
 
-# Files to skip when walking Java sources.
-_SKIP_FILES = {"package-info.java", "module-info.java"}
-
-# tree-sitter node types that represent Java type declarations.
-_TYPE_DECL_TYPES = {"class_declaration", "interface_declaration", "enum_declaration"}
-
-# tree-sitter node types that represent method-like declarations.
-_METHOD_DECL_TYPES = {"method_declaration", "constructor_declaration"}
-
 
 class JavaAstSymbolsExtractor:
-    """Populate hierarchy leaf nodes with Java symbol data."""
+    """Populate hierarchy leaf nodes with Java symbol data from compiled bytecode."""
 
     def can_handle(self, project_dir: Path) -> bool:
         return (project_dir / "pom.xml").exists()
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
-        try:
-            import tree_sitter_java as tsjava
-            from tree_sitter import Language, Parser
-        except ImportError:
+        javap_path = shutil.which("javap")
+        if not javap_path:
             logger.warning(
-                "tree-sitter / tree-sitter-java not installed — "
-                "skipping Java symbol extraction. "
-                "Install with: pip install codezoom[java]"
+                "javap not found on PATH — skipping Java symbol extraction. "
+                "Ensure a JDK is installed."
             )
             return
 
-        src_dir = project_dir / "src" / "main" / "java"
-        if not src_dir.is_dir():
+        classes_dir = project_dir / "target" / "classes"
+        if not classes_dir.is_dir():
+            logger.warning(
+                "target/classes not found — run `mvn compile` first. "
+                "Skipping Java symbol extraction."
+            )
             return
 
-        language = Language(tsjava.language())
-        parser = Parser(language)
+        # Extract class and method declarations from bytecode
+        symbols_by_package = _extract_symbols_from_bytecode(javap_path, classes_dir)
 
-        file_count = 0
-        symbol_count = 0
-        for java_file in src_dir.rglob("*.java"):
-            if java_file.name in _SKIP_FILES:
-                continue
-
-            # Compute package name from directory structure.
-            relative = java_file.parent.relative_to(src_dir)
-            package_name = str(relative).replace("/", ".").replace("\\", ".")
-            if package_name == ".":
-                package_name = ""
-
-            symbols = _extract_symbols(parser, java_file)
-            if not symbols:
-                continue
-
-            file_count += 1
-            symbol_count += len(symbols)
-
-            # Merge into the hierarchy node for this package.
+        # Merge into graph hierarchy
+        for package_name, symbols in symbols_by_package.items():
             node = graph.hierarchy.get(package_name)
             if node is None:
                 node = NodeData()
@@ -76,182 +50,239 @@ class JavaAstSymbolsExtractor:
                 node.symbols = {}
             node.symbols.update(symbols)
 
-        logger.debug("Java AST: %d files, %d symbols", file_count, symbol_count)
+        symbol_count = sum(len(syms) for syms in symbols_by_package.values())
+        logger.debug("Java bytecode: %d packages, %d symbols", len(symbols_by_package), symbol_count)
 
-        # Extract method calls from bytecode using javap
-        javap_path = shutil.which("javap")
-        classes_dir = project_dir / "target" / "classes"
-        if javap_path and classes_dir.is_dir():
-            method_calls = _extract_method_calls_from_bytecode(javap_path, classes_dir)
-            _merge_method_calls(graph, method_calls)
-        else:
-            if not javap_path:
-                logger.warning("javap not found — method call edges will be incomplete")
-            if not classes_dir.is_dir():
-                logger.warning("target/classes not found — run `mvn compile` first for accurate method calls")
+        # Extract method calls from bytecode
+        method_calls = _extract_method_calls_from_bytecode(javap_path, classes_dir)
+        _merge_method_calls(graph, method_calls)
 
 
-def _extract_symbols(parser, java_file: Path) -> dict[str, SymbolData] | None:
-    """Extract type and method symbols from a single Java file."""
-    try:
-        source = java_file.read_bytes()
-        tree = parser.parse(source)
-    except Exception:
-        return None
+def _extract_symbols_from_bytecode(
+    javap_path: str, classes_dir: Path
+) -> dict[str, dict[str, SymbolData]]:
+    """Extract class and method declarations from bytecode using javap -v -l.
 
-    results: dict[str, SymbolData] = {}
-
-    for node in tree.root_node.children:
-        if node.type in _TYPE_DECL_TYPES:
-            symbol = _extract_type(node, source)
-            if symbol:
-                results[symbol.name] = symbol
-
-    return results or None
-
-
-def _extract_type(node, source: bytes, parent_name: str = "") -> SymbolData | None:
-    """Extract a class/interface/enum declaration and its methods."""
-    name_node = node.child_by_field_name("name")
-    if name_node is None:
-        return None
-
-    simple_name = name_node.text.decode("utf-8")
-    # Qualified name for inner classes
-    name = f"{parent_name}.{simple_name}" if parent_name else simple_name
-    line = node.start_point[0] + 1  # 1-indexed
-
-    # Extract visibility modifier
-    visibility = _extract_visibility(node)
-
-    # Extract superclass and interfaces.
-    inherits: list[str] = []
-
-    superclass = node.child_by_field_name("superclass")
-    if superclass is not None:
-        # superclass node wraps a type_identifier
-        for child in superclass.children:
-            if child.type == "type_identifier":
-                inherits.append(child.text.decode("utf-8"))
-
-    interfaces = node.child_by_field_name("interfaces")
-    if interfaces is not None:
-        for child in interfaces.children:
-            if child.type == "type_identifier":
-                inherits.append(child.text.decode("utf-8"))
-
-    # Extract methods and nested classes from the class body.
-    children: dict[str, SymbolData] = {}
-    body = node.child_by_field_name("body")
-    if body is not None:
-        for child in body.children:
-            if child.type in _METHOD_DECL_TYPES:
-                method = _extract_method(child, source)
-                if method:
-                    children[method.name] = method
-            elif child.type in _TYPE_DECL_TYPES:
-                # Recursively extract nested classes
-                nested_class = _extract_type(child, source, parent_name=name)
-                if nested_class:
-                    children[nested_class.name] = nested_class
-
-    return SymbolData(
-        name=name,
-        kind="class",
-        line=line,
-        inherits=inherits,
-        children=children,
-        visibility=visibility,
-    )
-
-
-def _extract_method(node, source: bytes) -> SymbolData | None:
-    """Extract a method/constructor declaration and its calls."""
-    name_node = node.child_by_field_name("name")
-    if name_node is None:
-        # Constructors don't have a name field, use the class name
-        if node.type == "constructor_declaration":
-            # For constructors, we'll use a special marker
-            simple_name = "<init>"
-        else:
-            return None
-    else:
-        simple_name = name_node.text.decode("utf-8")
-
-    line = node.start_point[0] + 1
-
-    # Extract visibility modifier
-    visibility = _extract_visibility(node)
-
-    # Extract parameter types to create a unique signature
-    params_node = node.child_by_field_name("parameters")
-    param_types = _extract_parameter_types(params_node, source)
-
-    # Create unique name with signature: methodName(Type1,Type2,...)
-    signature = f"({','.join(param_types)})"
-    unique_name = f"{simple_name}{signature}"
-
-    # Note: Method calls are extracted from bytecode in a separate pass
-    # to get accurate signatures including overload resolution
-
-    return SymbolData(
-        name=unique_name,
-        kind="method",
-        line=line,
-        calls=[],  # Will be populated from bytecode analysis
-        visibility=visibility,
-    )
-
-
-def _extract_parameter_types(params_node, source: bytes) -> list[str]:
-    """Extract parameter type names from a formal_parameters node."""
-    if params_node is None:
-        return []
-
-    param_types = []
-    for child in params_node.children:
-        if child.type == "formal_parameter" or child.type == "spread_parameter":
-            # Get the type node
-            type_node = child.child_by_field_name("type")
-            if type_node is not None:
-                # Extract the type text (handles primitives, objects, arrays, generics)
-                type_text = type_node.text.decode("utf-8")
-                # Simplify generic types to just the base type for readability
-                # e.g., "List<String>" -> "List"
-                if "<" in type_text:
-                    type_text = type_text.split("<")[0]
-                param_types.append(type_text)
-
-    return param_types
-
-
-
-
-def _extract_visibility(node) -> str:
+    Returns: {package: {class_name: SymbolData}}
     """
-    Extract visibility modifier from a type or method declaration.
-    Returns: "public", "protected", "private", or "package" (package-private).
-    """
-    # Find modifiers node among children (it's not a named field in tree-sitter-java)
-    modifiers = None
-    for child in node.children:
-        if child.type == "modifiers":
-            modifiers = child
-            break
+    class_files = sorted(classes_dir.rglob("*.class"))
+    if not class_files:
+        return {}
 
-    if modifiers is None:
-        return "package"  # Default is package-private in Java
+    result = subprocess.run(
+        [javap_path, "-v", "-l", "-p", *(str(f) for f in class_files)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.warning("javap -v -l failed: %s", result.stderr)
+        return {}
 
-    # Check for visibility modifiers
-    for child in modifiers.children:
-        if child.type == "public":
-            return "public"
-        elif child.type == "protected":
-            return "protected"
-        elif child.type == "private":
-            return "private"
+    # Parse javap -v output
+    # Format:
+    #   Classfile /path/to/Foo.class
+    #     flags: (0x0021) ACC_PUBLIC, ACC_SUPER
+    #     this_class: #X                         // pkg/Foo
+    #     super_class: #Y                        // java/lang/Object
+    #     interfaces: 1, fields: 2, methods: 3, attributes: 1
+    #   ...
+    #   public void method(int);
+    #     descriptor: (I)V
+    #     flags: (0x0001) ACC_PUBLIC
+    #     Code:
+    #       ...
+    #     LineNumberTable:
+    #       line 10: 0
 
-    return "package"  # No explicit visibility modifier = package-private
+    classfile_pattern = re.compile(r"^Classfile (.+)$")
+    this_class_pattern = re.compile(r"^\s+this_class:\s+#\d+\s+//\s+(.+)$")
+    super_class_pattern = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
+    interface_pattern = re.compile(r"^\s+#\d+ = Class\s+#\d+\s+//\s+(.+)$")
+    method_decl_pattern = re.compile(r"^\s+(public |protected |private |static |final |synchronized |native |abstract |)+([^(]+)\(([^)]*)\);$")
+    descriptor_pattern = re.compile(r"^\s+descriptor:\s+(.+)$")
+    flags_pattern = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
+    line_number_pattern = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
+
+    # package -> {class_name -> SymbolData}
+    symbols_by_package: dict[str, dict[str, SymbolData]] = defaultdict(dict)
+
+    current_classfile = None
+    current_fqcn = None
+    current_package = None
+    current_class_name = None
+    current_class_visibility = "package"
+    current_class_line = None
+    current_inherits = []
+    current_methods = {}
+
+    current_method_name = None
+    current_method_visibility = "package"
+    current_method_line = None
+    in_line_number_table = False
+
+    for line in result.stdout.splitlines():
+        # New class file
+        cfm = classfile_pattern.match(line)
+        if cfm:
+            # Save previous class if any
+            if current_class_name and current_package is not None:
+                symbols_by_package[current_package][current_class_name] = SymbolData(
+                    name=current_class_name,
+                    kind="class",
+                    line=current_class_line,
+                    inherits=current_inherits,
+                    children=current_methods,
+                    visibility=current_class_visibility,
+                )
+
+            # Reset for new class
+            current_classfile = Path(cfm.group(1))
+            current_class_line = None
+            current_inherits = []
+            current_methods = {}
+            current_method_name = None
+            in_line_number_table = False
+            continue
+
+        # Extract full class name
+        tcm = this_class_pattern.match(line)
+        if tcm:
+            # Get the fully qualified class name with $ for inner classes
+            fqcn_with_dollar = tcm.group(1).replace("/", ".")
+
+            # Inner classes use $ separator (e.g., pkg.Outer$Inner)
+            # We need to find the package part (before the top-level class)
+            # by looking at the directory structure
+            parts = fqcn_with_dollar.split(".")
+
+            # The package is everything except the last part(s) that form the class name
+            # Class name can have $ for inner classes (e.g., "Outer$Inner")
+            # Find where the class name starts (after the last directory separator in the file path)
+            if current_classfile:
+                # Extract package from file path
+                try:
+                    rel_path = current_classfile.relative_to(classes_dir)
+                    package_path = rel_path.parent
+                    current_package = str(package_path).replace("/", ".").replace("\\", ".")
+                    if current_package == ".":
+                        current_package = ""
+
+                    # Class name is the file name without .class, with $ converted to .
+                    class_file_name = current_classfile.stem  # removes .class
+                    current_class_name = class_file_name.replace("$", ".")
+                except ValueError:
+                    # Fallback if relative path fails
+                    if "." in fqcn_with_dollar:
+                        current_package = fqcn_with_dollar.rsplit(".", 1)[0]
+                        current_class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace("$", ".")
+                    else:
+                        current_package = ""
+                        current_class_name = fqcn_with_dollar.replace("$", ".")
+            continue
+
+        # Extract superclass
+        scm = super_class_pattern.match(line)
+        if scm:
+            super_class = scm.group(1).split("/")[-1]
+            if super_class != "Object":  # Skip java.lang.Object
+                current_inherits.append(super_class)
+            continue
+
+        # Extract class-level flags for visibility
+        if current_class_name and not current_methods and "flags:" in line:
+            fm = flags_pattern.match(line)
+            if fm:
+                flags = fm.group(1)
+                if "ACC_PUBLIC" in flags:
+                    current_class_visibility = "public"
+                elif "ACC_PROTECTED" in flags:
+                    current_class_visibility = "protected"
+                elif "ACC_PRIVATE" in flags:
+                    current_class_visibility = "private"
+                else:
+                    current_class_visibility = "package"
+            continue
+
+        # Method declaration
+        mdm = method_decl_pattern.match(line)
+        if mdm and current_class_name:
+            modifiers = mdm.group(1).strip() if mdm.group(1) else ""
+            method_name_part = mdm.group(2).strip().split()[-1]  # Last word is method name
+            params_str = mdm.group(3).strip()
+
+            # Build method signature
+            if params_str:
+                params = [p.strip().split(".")[-1] for p in params_str.split(",")]
+                current_method_name = f"{method_name_part}({','.join(params)})"
+            else:
+                current_method_name = f"{method_name_part}()"
+
+            # Determine visibility from modifiers
+            if "public" in modifiers:
+                current_method_visibility = "public"
+            elif "protected" in modifiers:
+                current_method_visibility = "protected"
+            elif "private" in modifiers:
+                current_method_visibility = "private"
+            else:
+                current_method_visibility = "package"
+
+            current_method_line = None
+            in_line_number_table = False
+            continue
+
+        # LineNumberTable section
+        if "LineNumberTable:" in line:
+            in_line_number_table = True
+            continue
+
+        # Extract line number (first line of method)
+        if in_line_number_table and current_method_name:
+            lnm = line_number_pattern.match(line)
+            if lnm and current_method_line is None:
+                current_method_line = int(lnm.group(1))
+                # Save method
+                current_methods[current_method_name] = SymbolData(
+                    name=current_method_name,
+                    kind="method",
+                    line=current_method_line,
+                    calls=[],  # Will be populated later
+                    visibility=current_method_visibility,
+                )
+                current_method_name = None
+                in_line_number_table = False
+            continue
+
+    # Save last class
+    if current_class_name and current_package is not None:
+        symbols_by_package[current_package][current_class_name] = SymbolData(
+            name=current_class_name,
+            kind="class",
+            line=current_class_line,
+            inherits=current_inherits,
+            children=current_methods,
+            visibility=current_class_visibility,
+        )
+
+    # Post-process: nest inner classes as children of their parent classes
+    for package_name, symbols in symbols_by_package.items():
+        # Find inner classes (those with . in the name)
+        inner_classes = {name: sym for name, sym in symbols.items() if "." in name and sym.kind == "class"}
+
+        for inner_name, inner_symbol in inner_classes.items():
+            # Find parent class name (everything before the last .)
+            parent_name = inner_name.rsplit(".", 1)[0]
+
+            if parent_name in symbols:
+                # Move inner class to be a child of parent
+                symbols[parent_name].children[inner_name] = inner_symbol
+
+        # Remove inner classes from top level
+        for inner_name in inner_classes:
+            del symbols[inner_name]
+
+    logger.debug("Extracted symbols from bytecode for %d packages", len(symbols_by_package))
+    return symbols_by_package
 
 
 def _jvm_sig_to_java(jvm_sig: str) -> str:

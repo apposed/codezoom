@@ -21,8 +21,6 @@ classifiers = [
 [project.optional-dependencies]
 java = [
     "jgo>=2.0.0.dev0",
-    "tree-sitter>=0.23",
-    "tree-sitter-java>=0.23",
 ]
 
 [dependency-groups]

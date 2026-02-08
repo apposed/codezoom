@@ -161,7 +161,7 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
 
     aggregate_imports(root_id)
 
-    # Write into graph.hierarchy (preserving any existing symbols data)
+    # Write into graph.hierarchy (preserving any existing symbols and is_exported data)
     for node_id, raw in hierarchy.items():
         existing = graph.hierarchy.get(node_id)
         graph.hierarchy[node_id] = NodeData(
@@ -169,4 +169,5 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
             imports_to=sorted(raw["imports_to"]),
             imports_from=sorted(raw["imports_from"]),
             symbols=existing.symbols if existing else None,
+            is_exported=existing.is_exported if existing else True,
         )

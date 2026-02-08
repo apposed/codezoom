@@ -1455,6 +1455,9 @@
             // (is_exported is set by language-specific extractors)
             if (!nodeId.includes(':') && hierarchy[nodeId]) {
                 const isExported = hierarchy[nodeId].is_exported !== false;
+                if (isExported && !showPublic) {
+                    return false;  // Hide public/exported packages if public is unchecked
+                }
                 if (!isExported && !showPrivate) {
                     return false;  // Hide internal/private packages if private is unchecked
                 }

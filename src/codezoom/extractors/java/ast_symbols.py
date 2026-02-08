@@ -184,8 +184,13 @@ def _extract_visibility(node) -> str:
     Extract visibility modifier from a type or method declaration.
     Returns: "public", "protected", "private", or "package" (package-private).
     """
-    # Look for modifiers node
-    modifiers = node.child_by_field_name("modifiers")
+    # Find modifiers node among children (it's not a named field in tree-sitter-java)
+    modifiers = None
+    for child in node.children:
+        if child.type == "modifiers":
+            modifiers = child
+            break
+
     if modifiers is None:
         return "package"  # Default is package-private in Java
 

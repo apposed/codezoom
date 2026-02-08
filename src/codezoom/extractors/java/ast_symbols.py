@@ -111,6 +111,7 @@ def _extract_symbols_from_bytecode(
     current_package = None
     current_class_name = None
     current_class_visibility = "package"
+    current_class_flags_pending = None  # Store flags seen before class name is known
     current_class_line = None
     current_inherits = []
     current_methods = {}
@@ -138,6 +139,7 @@ def _extract_symbols_from_bytecode(
             # Reset for new class
             current_classfile = Path(cfm.group(1))
             current_class_line = None
+            current_class_flags_pending = None
             current_inherits = []
             current_methods = {}
             current_method_name = None
@@ -178,6 +180,18 @@ def _extract_symbols_from_bytecode(
                     else:
                         current_package = ""
                         current_class_name = fqcn_with_dollar.replace("$", ".")
+
+            # Apply pending class-level flags if we have them
+            if current_class_flags_pending:
+                if "ACC_PUBLIC" in current_class_flags_pending:
+                    current_class_visibility = "public"
+                elif "ACC_PROTECTED" in current_class_flags_pending:
+                    current_class_visibility = "protected"
+                elif "ACC_PRIVATE" in current_class_flags_pending:
+                    current_class_visibility = "private"
+                else:
+                    current_class_visibility = "package"
+                current_class_flags_pending = None
             continue
 
         # Extract superclass
@@ -189,23 +203,19 @@ def _extract_symbols_from_bytecode(
             continue
 
         # Extract class-level flags for visibility
-        if current_class_name and not current_methods and "flags:" in line:
+        # These appear after "Classfile" but before "this_class" line
+        if not current_class_name and not current_methods and "flags:" in line and current_classfile:
             fm = flags_pattern.match(line)
             if fm:
-                flags = fm.group(1)
-                if "ACC_PUBLIC" in flags:
-                    current_class_visibility = "public"
-                elif "ACC_PROTECTED" in flags:
-                    current_class_visibility = "protected"
-                elif "ACC_PRIVATE" in flags:
-                    current_class_visibility = "private"
-                else:
-                    current_class_visibility = "package"
+                current_class_flags_pending = fm.group(1)
             continue
 
         # Method declaration
         mdm = method_decl_pattern.match(line)
         if mdm and current_class_name:
+            current_method_name = None  # Will be set if not a bridge method
+            current_method_is_bridge = False  # Track if we should skip this method
+
             modifiers = mdm.group(1).strip() if mdm.group(1) else ""
             method_name_part = mdm.group(2).strip().split()[-1]  # Last word is method name
             params_str = mdm.group(3).strip()
@@ -218,9 +228,9 @@ def _extract_symbols_from_bytecode(
             # Build method signature
             if params_str:
                 params = [p.strip().split(".")[-1] for p in params_str.split(",")]
-                current_method_name = f"{method_name_part}({','.join(params)})"
+                method_sig = f"{method_name_part}({','.join(params)})"
             else:
-                current_method_name = f"{method_name_part}()"
+                method_sig = f"{method_name_part}()"
 
             # Determine visibility from modifiers
             if "public" in modifiers:
@@ -232,9 +242,20 @@ def _extract_symbols_from_bytecode(
             else:
                 current_method_visibility = "package"
 
+            # Store signature temporarily; will check flags before committing
+            current_method_name = method_sig
             current_method_line = None
             in_line_number_table = False
             continue
+
+        # Check method flags for ACC_BRIDGE (compiler-generated bridge methods)
+        # These appear after method declaration and before Code section
+        if current_method_name and not in_line_number_table and "flags:" in line:
+            fm = flags_pattern.match(line)
+            if fm and "ACC_BRIDGE" in fm.group(1):
+                # Skip bridge methods entirely
+                current_method_name = None
+                continue
 
         # LineNumberTable section
         if "LineNumberTable:" in line:
@@ -381,6 +402,8 @@ def _extract_method_calls_from_bytecode(
     current_package = ""
     current_class = ""
     current_method = ""
+    # Track methods we've already seen to avoid collecting calls from bridge methods
+    seen_methods: set[tuple[str, str, str]] = set()
 
     for line in result.stdout.splitlines():
         # Track current class
@@ -406,9 +429,18 @@ def _extract_method_calls_from_bytecode(
                 # Simplify parameter types (remove package prefixes)
                 params = [p.strip().split(".")[-1].split("[]")[0] + ("[]" if "[]" in p else "")
                          for p in params_str.split(",")]
-                current_method = f"{method_name}({','.join(params)})"
+                method_sig = f"{method_name}({','.join(params)})"
             else:
-                current_method = f"{method_name}()"
+                method_sig = f"{method_name}()"
+
+            # Check if we've already seen this method (to skip bridge methods)
+            method_key = (current_package, current_class, method_sig)
+            if method_key in seen_methods:
+                # Skip duplicate method (likely a bridge method)
+                current_method = ""
+            else:
+                seen_methods.add(method_key)
+                current_method = method_sig
             continue
 
         # Extract method invocations

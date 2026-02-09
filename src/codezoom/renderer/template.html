@@ -232,8 +232,8 @@
         }
 
         #sidebar {
-            width: 200px;
-            min-width: 180px;
+            width: 230px;
+            min-width: 230px;
             max-width: 600px;
             background: var(--bg-secondary);
             display: flex;
@@ -289,7 +289,7 @@
         .control-row-horizontal {
             display: flex;
             gap: 4px;
-            align-items: center;
+            align-items: flex-start;
         }
 
         p {
@@ -461,42 +461,57 @@
                 </div>
             </div>
 
+            <!-- Nodes and Edges -->
+            <div class="control-row">
+                <div class="control-row-horizontal">
+                    <div style="margin-right: 10px">
+                        <div class="section-label">Nodes</div>
+
+                        <!-- Dependency visibility (shown only at top level) -->
+                        <label id="vis-direct-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-direct" checked>
+                            <span>Direct</span>
+                        </label>
+                        <label id="vis-transitive-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-transitive" checked>
+                            <span>Transitive</span>
+                        </label>
+
+                        <!-- Code visibility (shown at package/class levels) -->
+                        <label id="vis-public-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-public" checked>
+                            <span>Public</span>
+                        </label>
+                        <label id="vis-protected-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-protected" checked>
+                            <span>Protected</span>
+                        </label>
+                        <label id="vis-package-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-package" checked>
+                            <span>Package</span>
+                        </label>
+                        <label id="vis-private-label" class="checkbox-label" style="display: none;">
+                            <input type="checkbox" id="vis-private" checked>
+                            <span>Private</span>
+                        </label>
+                    </div>
+                    <div>
+                        <div class="section-label">Edges</div>
+                        <label id="vis-inherits-label" class="checkbox-label" title="Structural 'is-a' relationship hierarchies">
+                            <input type="checkbox" id="vis-inherits" checked>
+                            <span>Inherits</span>
+                        </label>
+                        <label id="vis-uses-label" class="checkbox-label" title="Runtime dependencies (components/libraries), imports (packages/modules), usage (classes), calls (functions/methods)">
+                            <input type="checkbox" id="vis-uses" checked>
+                            <span>Uses</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Visibility -->
             <div class="control-row">
                 <div class="section-label">Visibility</div>
-
-                <!-- Dependency visibility (shown only at top level) -->
-                <label id="vis-direct-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-direct" checked>
-                    <span>Direct</span>
-                </label>
-                <label id="vis-transitive-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-transitive" checked>
-                    <span>Transitive</span>
-                </label>
-
-                <!-- Code visibility (shown at package/class levels) -->
-                <label id="vis-public-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-public" checked>
-                    <span>Public</span>
-                </label>
-                <label id="vis-protected-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-protected" checked>
-                    <span>Protected</span>
-                </label>
-                <label id="vis-package-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-package" checked>
-                    <span>Package</span>
-                </label>
-                <label id="vis-private-label" class="checkbox-label" style="display: none;">
-                    <input type="checkbox" id="vis-private" checked>
-                    <span>Private</span>
-                </label>
-            </div>
-
-            <!-- Node Hiding -->
-            <div class="control-row">
-                <div class="section-label">Node Hiding</div>
                 <p>Right-click to hide a node.</p>
                 <label class="checkbox-label">
                     <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
@@ -926,7 +941,7 @@
                     {
                         selector: 'edge',
                         style: {
-                            'curve-style': 'bezier',
+                            'curve-style': 'straight',
                             'target-arrow-shape': 'triangle',
                             'target-arrow-color': colors.edgeArrow,
                             'target-arrow-fill': 'filled',
@@ -934,6 +949,17 @@
                             'line-color': colors.edgeLine,
                             'width': 2,
                             'opacity': 0.7,
+                        }
+                    },
+                    {
+                        selector: 'edge[type="inherits"]',
+                        style: {
+                            'target-arrow-shape': 'vee',
+                            'target-arrow-color': colors.nodeRoot, // !!!
+                            'line-color': colors.nodeRoot, // !!!
+                            'line-style': 'dashed',
+                            'width': 3,
+                            'z-index': 10,
                         }
                     },
                     {
@@ -1094,7 +1120,7 @@
                 pythonDepsDirect.forEach(dep => {
                     const edgeId = ROOT + '->ext-dep-' + dep;
                     if (!seenEdges.has(edgeId)) {
-                        elements.push({ data: { id: edgeId, source: ROOT, target: 'ext-dep-' + dep } });
+                        elements.push({ data: { id: edgeId, source: ROOT, target: 'ext-dep-' + dep, type: 'dependency' } });
                         seenEdges.add(edgeId);
                     }
                 });
@@ -1105,7 +1131,7 @@
                             if (pythonDeps.includes(depDep)) {
                                 const edgeId = 'ext-dep-' + dep + '->ext-dep-' + depDep;
                                 if (!seenEdges.has(edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: 'ext-dep-' + dep, target: 'ext-dep-' + depDep } });
+                                    elements.push({ data: { id: edgeId, source: 'ext-dep-' + dep, target: 'ext-dep-' + depDep, type: 'dependency' } });
                                     seenEdges.add(edgeId);
                                 }
                             }
@@ -1167,7 +1193,7 @@
                             if (childSet.has(targetId) && childId !== targetId) {
                                 const edgeId = childId + '->' + targetId;
                                 if (!elements.find(el => el.data.id === edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: childId, target: targetId } });
+                                    elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import' } });
                                 }
                             }
                         });
@@ -1200,33 +1226,16 @@
                 if (classDeps) {
                     const nodeIds = new Set(elements.filter(e => !e.data.source).map(e => e.data.id));
 
-                    // Build set of inheritance relationships to avoid duplicates
-                    const inheritanceEdges = new Set();
-                    const functions = functionData[nodeId] || {};
-                    Object.entries(functions).forEach(([name, info]) => {
-                        if (info.inherits && info.inherits.length > 0) {
-                            info.inherits.forEach(parentName => {
-                                inheritanceEdges.add(name + '->' + parentName);
-                            });
-                        }
-                    });
-
                     Object.entries(classDeps).forEach(([srcClass, targets]) => {
                         const srcId = nodeId + ':' + srcClass;
                         if (!nodeIds.has(srcId)) return;
                         targets.forEach(target => {
-                            // Skip if this is already an inheritance edge
-                            const targetClassName = target.split('.').pop(); // Get class name without package
-                            if (inheritanceEdges.has(srcClass + '->' + targetClassName)) {
-                                return; // Already shown as inheritance edge
-                            }
-
                             // target with '.' is a package node ID; without is a same-package class
                             const tgtId = target.includes('.') ? target : nodeId + ':' + target;
                             if (!nodeIds.has(tgtId) || srcId === tgtId) return;
                             const edgeId = srcId + '->dep-' + target;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: srcId, target: tgtId } });
+                                elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
                             }
                         });
                     });
@@ -1265,7 +1274,7 @@
                         if (functions[calledName]) {
                             const edgeId = moduleId + ':' + name + '->' + calledName;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + calledName } });
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + calledName, type: 'call' } });
                             }
                         }
                     });
@@ -1276,7 +1285,7 @@
                         if (functions[parentName]) {
                             const edgeId = moduleId + ':' + name + '-inherits-' + parentName;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + parentName } });
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + name, target: moduleId + ':' + parentName, type: 'inherits' } });
                             }
                         }
                     });
@@ -1288,32 +1297,16 @@
             if (classDeps) {
                 const nodeIds = new Set(elements.filter(e => !e.data.source).map(e => e.data.id));
 
-                // Build set of inheritance relationships to avoid duplicates
-                const inheritanceEdges = new Set();
-                Object.entries(functions).forEach(([name, info]) => {
-                    if (info.inherits && info.inherits.length > 0) {
-                        info.inherits.forEach(parentName => {
-                            inheritanceEdges.add(name + '->' + parentName);
-                        });
-                    }
-                });
-
                 Object.entries(classDeps).forEach(([srcClass, targets]) => {
                     const srcId = moduleId + ':' + srcClass;
                     if (!nodeIds.has(srcId)) return;
                     targets.forEach(target => {
-                        // Skip if this is already an inheritance edge
-                        const targetClassName = target.split('.').pop(); // Get class name without package
-                        if (inheritanceEdges.has(srcClass + '->' + targetClassName)) {
-                            return; // Already shown as inheritance edge
-                        }
-
                         // target with '.' is a package node ID; without is a same-package class
                         const tgtId = target.includes('.') ? target : moduleId + ':' + target;
                         if (!nodeIds.has(tgtId) || srcId === tgtId) return;
                         const edgeId = srcId + '->dep-' + target;
                         if (!elements.find(el => el.data.id === edgeId)) {
-                            elements.push({ data: { id: edgeId, source: srcId, target: tgtId } });
+                            elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
                         }
                     });
                 });
@@ -1365,7 +1358,7 @@
                             const fullCalledName = calledName.includes('.') ? calledName : `${symbolPath}.${calledName}`;
                             const edgeId = moduleId + ':' + fullChildName + '->' + calledName;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: moduleId + ':' + fullChildName, target: moduleId + ':' + fullCalledName } });
+                                elements.push({ data: { id: edgeId, source: moduleId + ':' + fullChildName, target: moduleId + ':' + fullCalledName, type: 'call' } });
                             }
                         }
                     });
@@ -1492,21 +1485,21 @@
 
             // Show relevant checkboxes based on context
             if (context === 'dependencies') {
-                document.getElementById('vis-direct-label').style.display = 'inline';
-                document.getElementById('vis-transitive-label').style.display = 'inline';
+                document.getElementById('vis-direct-label').style.display = 'block';
+                document.getElementById('vis-transitive-label').style.display = 'block';
             } else {
                 // Package/class/method views - show code visibility
-                document.getElementById('vis-public-label').style.display = 'inline';
+                document.getElementById('vis-public-label').style.display = 'block';
 
                 // Only show protected/package if they're actually used in the project
                 if (languageFeatures.hasProtected) {
-                    document.getElementById('vis-protected-label').style.display = 'inline';
+                    document.getElementById('vis-protected-label').style.display = 'block';
                 }
                 if (languageFeatures.hasPackage) {
-                    document.getElementById('vis-package-label').style.display = 'inline';
+                    document.getElementById('vis-package-label').style.display = 'block';
                 }
 
-                document.getElementById('vis-private-label').style.display = 'inline';
+                document.getElementById('vis-private-label').style.display = 'block';
             }
         }
 
@@ -1578,7 +1571,7 @@
             // Update which checkboxes are shown
             updateVisibilityCheckboxes();
 
-            // Apply filter
+            // Apply node filter
             cy.nodes().forEach(node => {
                 // Skip user-hidden nodes (they're handled separately)
                 if (node.hasClass('user-hidden')) return;
@@ -1587,6 +1580,26 @@
                     node.style('display', 'element');
                 } else {
                     node.style('display', 'none');
+                }
+            });
+
+            // Apply edge filter
+            const showInherits = document.getElementById('vis-inherits').checked;
+            const showUses = document.getElementById('vis-uses').checked;
+
+            cy.edges().forEach(edge => {
+                const edgeType = edge.data('type');
+                let shouldShow = true;
+
+                if (edgeType === 'inherits' && !showInherits) shouldShow = false;
+                if (edgeType === 'dependency' && !showUses) shouldShow = false;
+                if (edgeType === 'call' && !showUses) shouldShow = false;
+                if (edgeType === 'import' && !showUses) shouldShow = false;
+
+                if (shouldShow) {
+                    edge.style('display', 'element');
+                } else {
+                    edge.style('display', 'none');
                 }
             });
         }
@@ -1654,12 +1667,8 @@
                 // Update container background
                 document.getElementById('cy').style.background = colors.cyBackground;
 
-                // Update default edge styles
+                // Update node hover styles
                 cy.style()
-                    .selector('edge').style({
-                        'line-color': colors.edgeLine,
-                        'target-arrow-color': colors.edgeArrow
-                    })
                     .selector('node:hover').style({
                         'background-color': colors.nodeHover,
                         'color': colors.nodeHoverText
@@ -1712,7 +1721,8 @@
         // Visibility checkboxes
         const visibilityCheckboxes = [
             'vis-direct', 'vis-transitive',
-            'vis-public', 'vis-protected', 'vis-package', 'vis-private'
+            'vis-public', 'vis-protected', 'vis-package', 'vis-private',
+            'vis-inherits', 'vis-uses'
         ];
         visibilityCheckboxes.forEach(id => {
             const checkbox = document.getElementById(id);

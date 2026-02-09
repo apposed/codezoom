@@ -1638,15 +1638,69 @@
             const parts = [];
 
             history.forEach((nodeId, idx) => {
-                const label = idx === 0 ? data.project_name : nodeId;
-                if (idx === history.length - 1) {
-                    parts.push('<strong>' + label + '</strong>');
-                } else {
-                    parts.push('<a onclick="jumpTo(' + idx + ')">' + label + '</a>');
+                if (idx === 0) {
+                    // Root: show project name
+                    const label = data.project_name;
+                    if (history.length === 1) {
+                        parts.push('<strong>' + label + '</strong>');
+                    } else {
+                        parts.push('<a onclick="jumpTo(0)">' + label + '</a>');
+                    }
+                    return;
                 }
+
+                const prevNodeId = history[idx - 1];
+                let label = '';
+                let separator = '';
+
+                // Determine incremental label and separator based on node type
+                if (nodeId.includes(':')) {
+                    // Symbol node (class/method): format is "package:Symbol"
+                    const colonIdx = nodeId.lastIndexOf(':');
+                    const symbolPart = nodeId.substring(colonIdx + 1);
+
+                    if (prevNodeId.includes(':')) {
+                        // Previous was also a symbol - check for nesting
+                        const prevColonIdx = prevNodeId.lastIndexOf(':');
+                        const prevSymbolPath = prevNodeId.substring(prevColonIdx + 1);
+
+                        if (symbolPart.startsWith(prevSymbolPath + '.')) {
+                            // Nested symbol (e.g., "Class" -> "Class.method")
+                            label = symbolPart.substring(prevSymbolPath.length + 1);
+                            separator = '.';
+                        } else {
+                            // Different symbol at same level
+                            label = symbolPart;
+                            separator = ':';
+                        }
+                    } else {
+                        // Previous was a package, now showing a symbol
+                        label = symbolPart;
+                        separator = ':';
+                    }
+                } else {
+                    // Package node
+                    if (nodeId.startsWith(prevNodeId + '.')) {
+                        // Incremental package (e.g., "org.foo" -> "org.foo.bar")
+                        label = nodeId.substring(prevNodeId.length + 1);
+                        separator = '.';
+                    } else {
+                        // First level or different branch
+                        label = nodeId;
+                        separator = ' &rsaquo; ';
+                    }
+                }
+
+                // Build HTML
+                const isLast = idx === history.length - 1;
+                const html = isLast
+                    ? '<strong>' + label + '</strong>'
+                    : '<a onclick="jumpTo(' + idx + ')">' + label + '</a>';
+
+                parts.push(separator + html);
             });
 
-            breadcrumb.innerHTML = parts.join(' / ');
+            breadcrumb.innerHTML = parts.join('');
         }
 
         function jumpTo(idx) {

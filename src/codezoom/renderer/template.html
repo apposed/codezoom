@@ -853,58 +853,61 @@
             }
         }
 
+        // Helper to determine if a color is light or dark
+        function isLightColor(color) {
+            if (!color) return false;
+            const hex = color.replace('#', '');
+            if (hex.length === 3) {
+                const r = parseInt(hex[0] + hex[0], 16);
+                const g = parseInt(hex[1] + hex[1], 16);
+                const b = parseInt(hex[2] + hex[2], 16);
+                return (r + g + b) / 3 > 127;
+            }
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            return (r + g + b) / 3 > 127;
+        }
+
+        function applyColorsToNode(node, colors) {
+            const d = node.data();
+            const type = d.nodeType || 'regular'; // Default to regular
+
+            // Simple type-to-color mapping
+            const colorMap = {
+                'root': [colors.nodeRoot, colors.nodeRootText],
+                'clickable': [colors.nodeClickable, colors.nodeClickableText],
+                'regular': [colors.nodeRegular, colors.nodeRegularText],
+                'class': [colors.nodeClass, colors.nodeClassText],
+                'function': [colors.nodeFunction, colors.nodeFunctionText],
+                'method': [colors.nodeMethod, colors.nodeMethodText],
+                'external-direct': [colors.nodeExternalDirect, colors.nodeExternalDirectText],
+                'external-indirect': [colors.nodeExternalIndirect, colors.nodeExternalIndirectText],
+            };
+
+            const [bgColor, textColor] = colorMap[type] || [colors.nodeRegular, colors.nodeRegularText];
+
+            // Choose outline color based on text color brightness
+            const outlineColor = isLightColor(textColor) ? colors.textOutlineDark : colors.textOutlineLight;
+
+            node.style('background-color', bgColor);
+            node.style('color', textColor);
+            node.style('text-outline-color', outlineColor);
+
+            if (d.borderWidth) node.style('border-width', d.borderWidth);
+            if (d.borderColor) node.style('border-color', d.borderColor);
+
+            // Apply border style based on visibility
+            const borderStyle = getBorderStyleForVisibility(d.visibility);
+            node.style('border-style', borderStyle);
+        }
+
         function applyNodeColors() {
             if (!cy) return;
             const colors = themes[currentTheme];
 
-            // Helper to determine if a color is light or dark
-            function isLightColor(color) {
-                // Simple check: if it's white, #fff, or starts with #f, #e, #d, #c, #b, #a, #9, #8
-                if (!color) return false;
-                const hex = color.replace('#', '');
-                if (hex.length === 3) {
-                    const r = parseInt(hex[0] + hex[0], 16);
-                    const g = parseInt(hex[1] + hex[1], 16);
-                    const b = parseInt(hex[2] + hex[2], 16);
-                    return (r + g + b) / 3 > 127;
-                }
-                const r = parseInt(hex.substr(0, 2), 16);
-                const g = parseInt(hex.substr(2, 2), 16);
-                const b = parseInt(hex.substr(4, 2), 16);
-                return (r + g + b) / 3 > 127;
-            }
-
             cy.nodes().forEach(node => {
-                const d = node.data();
-                const type = d.nodeType || 'regular'; // Default to regular
-
-                // Simple type-to-color mapping
-                const colorMap = {
-                    'root': [colors.nodeRoot, colors.nodeRootText],
-                    'clickable': [colors.nodeClickable, colors.nodeClickableText],
-                    'regular': [colors.nodeRegular, colors.nodeRegularText],
-                    'class': [colors.nodeClass, colors.nodeClassText],
-                    'function': [colors.nodeFunction, colors.nodeFunctionText],
-                    'method': [colors.nodeMethod, colors.nodeMethodText],
-                    'external-direct': [colors.nodeExternalDirect, colors.nodeExternalDirectText],
-                    'external-indirect': [colors.nodeExternalIndirect, colors.nodeExternalIndirectText],
-                };
-
-                const [bgColor, textColor] = colorMap[type] || [colors.nodeRegular, colors.nodeRegularText];
-
-                // Choose outline color based on text color brightness
-                const outlineColor = isLightColor(textColor) ? colors.textOutlineDark : colors.textOutlineLight;
-
-                node.style('background-color', bgColor);
-                node.style('color', textColor);
-                node.style('text-outline-color', outlineColor);
-
-                if (d.borderWidth) node.style('border-width', d.borderWidth);
-                if (d.borderColor) node.style('border-color', d.borderColor);
-
-                // Apply border style based on visibility
-                const borderStyle = getBorderStyleForVisibility(d.visibility);
-                node.style('border-style', borderStyle);
+                applyColorsToNode(node, colors);
             });
         }
 
@@ -963,7 +966,7 @@
                         }
                     },
                     {
-                        selector: 'node:hover',
+                        selector: 'node.hover',
                         style: {
                             'background-color': colors.nodeHover,
                             'color': colors.nodeHoverText,
@@ -980,6 +983,25 @@
                 wheelSensitivity: 0.1,
                 minZoom: 0.1,
                 maxZoom: 3,
+            });
+
+            // Handle hover state
+            cy.on('mouseover', 'node', function(evt) {
+                const node = evt.target;
+                const colors = themes[currentTheme];
+                const outlineColor = isLightColor(colors.nodeHoverText) ? colors.textOutlineDark : colors.textOutlineLight;
+                node.style({
+                    'background-color': colors.nodeHover,
+                    'color': colors.nodeHoverText,
+                    'border-color': colors.nodeHover,
+                    'text-outline-color': outlineColor
+                });
+            });
+
+            cy.on('mouseout', 'node', function(evt) {
+                const node = evt.target;
+                const colors = themes[currentTheme];
+                applyColorsToNode(node, colors);
             });
 
             cy.on('tap', 'node', function(evt) {
@@ -1669,7 +1691,7 @@
 
                 // Update node hover styles
                 cy.style()
-                    .selector('node:hover').style({
+                    .selector('node.hover').style({
                         'background-color': colors.nodeHover,
                         'color': colors.nodeHoverText
                     })

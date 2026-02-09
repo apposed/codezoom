@@ -411,8 +411,8 @@
                 <p>Click breadcrumb to go back.</p>
                 <div id="breadcrumb" title="Breadcrumb trail"></div>
                 <div class="control-row-horizontal">
-                    <button id="resetBtn" onclick="reset()" title="Reset to top">&#x1f3e0;</button>
-                    <button id="backBtn" onclick="goUp()" title="Go up one level">&#x2b06;&#xfe0f;</button>
+                    <button id="resetBtn" onclick="reset()" title="Reset to top">&#x1f3e0;</button> <!-- House -->
+                    <button id="backBtn" onclick="goUp()" title="Go up one level">&#x2b06;&#xfe0f;</button> <!-- Up Arrow -->
                 </div>
             </div>
 
@@ -420,9 +420,9 @@
             <div class="control-row">
                 <div class="section-label">Layout</div>
                 <div class="control-row-horizontal">
-                    <button onclick="applyLayout('dagre', 'cose')" title="Hierarchical layout">&#x2935;&#xfe0f;</button>
-                    <button onclick="applyLayout('cose')" title="Force-directed layout">&#x2b50;</button>
-                    <button onclick="cy.fit()" title="Fit view">&#x1f50d;</button>
+                    <button onclick="applyLayout('dagre', 'cose')" title="Hierarchical layout">&#x2935;&#xfe0f;</button> <!-- Arrow Pointing Rightwards Then Curving Downwards -->
+                    <button onclick="applyLayout('cose')" title="Force-directed layout">&#x2b50;</button> <!-- Star -->
+                    <button onclick="cy.fit()" title="Fit view">&#x1f50d;</button> <!-- Magnifying Glass Tilting Left -->
                 </div>
             </div>
 
@@ -430,7 +430,7 @@
             <div class="control-row">
                 <div class="section-label">Appearance</div>
                 <div class="control-row-horizontal" title="Theme">
-                    <div>&#x1f3a8;</div>
+                    <div>&#x1f3a8;</div> <!-- Artist Palette -->
                     <select id="themeSelector" onchange="changeTheme(this.value)">
                         <option value="light">Light</option>
                         <option value="dark">Dark</option>
@@ -446,14 +446,14 @@
                     </select>
                 </div>
                 <div class="control-row-horizontal" title="Node Size">
-                    <div>&#x1f7e0;</div>
+                    <div>&#x1f7e0;</div> <!-- Orange Circle -->
                     <div class="slider-container">
                         <input type="range" id="sizeSlider" min="20" max="100" value="50">
                         <span id="sizeValue">50</span>
                     </div>
                 </div>
                 <div class="control-row-horizontal" title="Font Size">
-                    <div style="color: var(--text-secondary); font-weight: bold">&#x1f5da;</div>
+                    <div style="color: var(--text-secondary); font-weight: bold">&#x1f5da;</div> <!-- Increase Font Size Symbol -->
                     <div class="slider-container">
                         <input type="range" id="fontSlider" min="8" max="40" value="12">
                         <span id="fontValue">12</span>
@@ -515,9 +515,9 @@
                 <p>Right-click to hide a node.</p>
                 <label class="checkbox-label">
                     <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
-                    <span>&#x1fae3; Peek at hidden</span>
+                    <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
                 </label>
-                <button onclick="unhideAll()" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button>
+                <button onclick="unhideAll()" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button> <!-- Eye -->
             </div>
         </div>
     </div>

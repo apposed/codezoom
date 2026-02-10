@@ -18,7 +18,7 @@ class JavaMavenDepsExtractor:
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
         try:
-            from jgo.maven import MavenContext, Model, POM
+            from jgo.maven import POM, MavenContext, Model
         except ImportError:
             logger.warning(
                 "jgo not installed — skipping Maven dependency extraction. "

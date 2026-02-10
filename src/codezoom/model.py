@@ -27,7 +27,9 @@ class NodeData:
     imports_from: list[str] = field(default_factory=list)
     symbols: dict[str, SymbolData] | None = None
     class_deps: dict[str, list[str]] | None = None
-    is_exported: bool = True  # For Java: whether package is exported in module-info.java
+    is_exported: bool = (
+        True  # For Java: whether package is exported in module-info.java
+    )
 
 
 @dataclass

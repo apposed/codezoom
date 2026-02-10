@@ -51,7 +51,11 @@ class JavaAstSymbolsExtractor:
             node.symbols.update(symbols)
 
         symbol_count = sum(len(syms) for syms in symbols_by_package.values())
-        logger.debug("Java bytecode: %d packages, %d symbols", len(symbols_by_package), symbol_count)
+        logger.debug(
+            "Java bytecode: %d packages, %d symbols",
+            len(symbols_by_package),
+            symbol_count,
+        )
 
         # Extract method calls from bytecode
         method_calls = _extract_method_calls_from_bytecode(javap_path, classes_dir)
@@ -97,9 +101,9 @@ def _extract_symbols_from_bytecode(
     classfile_pattern = re.compile(r"^Classfile (.+)$")
     this_class_pattern = re.compile(r"^\s+this_class:\s+#\d+\s+//\s+(.+)$")
     super_class_pattern = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
-    interface_pattern = re.compile(r"^\s+#\d+ = Class\s+#\d+\s+//\s+(.+)$")
-    method_decl_pattern = re.compile(r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$")
-    descriptor_pattern = re.compile(r"^\s+descriptor:\s+(.+)$")
+    method_decl_pattern = re.compile(
+        r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$"
+    )
     flags_pattern = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
     line_number_pattern = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
 
@@ -107,7 +111,6 @@ def _extract_symbols_from_bytecode(
     symbols_by_package: dict[str, dict[str, SymbolData]] = defaultdict(dict)
 
     current_classfile = None
-    current_fqcn = None
     current_package = None
     current_class_name = None
     current_class_visibility = "package"
@@ -152,11 +155,6 @@ def _extract_symbols_from_bytecode(
             # Get the fully qualified class name with $ for inner classes
             fqcn_with_dollar = tcm.group(1).replace("/", ".")
 
-            # Inner classes use $ separator (e.g., pkg.Outer$Inner)
-            # We need to find the package part (before the top-level class)
-            # by looking at the directory structure
-            parts = fqcn_with_dollar.split(".")
-
             # The package is everything except the last part(s) that form the class name
             # Class name can have $ for inner classes (e.g., "Outer$Inner")
             # Find where the class name starts (after the last directory separator in the file path)
@@ -165,7 +163,9 @@ def _extract_symbols_from_bytecode(
                 try:
                     rel_path = current_classfile.relative_to(classes_dir)
                     package_path = rel_path.parent
-                    current_package = str(package_path).replace("/", ".").replace("\\", ".")
+                    current_package = (
+                        str(package_path).replace("/", ".").replace("\\", ".")
+                    )
                     if current_package == ".":
                         current_package = ""
 
@@ -176,7 +176,9 @@ def _extract_symbols_from_bytecode(
                     # Fallback if relative path fails
                     if "." in fqcn_with_dollar:
                         current_package = fqcn_with_dollar.rsplit(".", 1)[0]
-                        current_class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace("$", ".")
+                        current_class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace(
+                            "$", "."
+                        )
                     else:
                         current_package = ""
                         current_class_name = fqcn_with_dollar.replace("$", ".")
@@ -204,7 +206,12 @@ def _extract_symbols_from_bytecode(
 
         # Extract class-level flags for visibility
         # These appear after "Classfile" but before "this_class" line
-        if not current_class_name and not current_methods and "flags:" in line and current_classfile:
+        if (
+            not current_class_name
+            and not current_methods
+            and "flags:" in line
+            and current_classfile
+        ):
             fm = flags_pattern.match(line)
             if fm:
                 current_class_flags_pending = fm.group(1)
@@ -214,10 +221,11 @@ def _extract_symbols_from_bytecode(
         mdm = method_decl_pattern.match(line)
         if mdm and current_class_name:
             current_method_name = None  # Will be set if not a bridge method
-            current_method_is_bridge = False  # Track if we should skip this method
 
             modifiers = mdm.group(1).strip() if mdm.group(1) else ""
-            method_name_part = mdm.group(2).strip().split()[-1]  # Last word is method name
+            method_name_part = (
+                mdm.group(2).strip().split()[-1]
+            )  # Last word is method name
             params_str = mdm.group(3).strip()
 
             # For constructors, use simple class name (last part after dot)
@@ -293,7 +301,11 @@ def _extract_symbols_from_bytecode(
     # Post-process: nest inner classes as children of their parent classes
     for package_name, symbols in symbols_by_package.items():
         # Find inner classes (those with . in the name)
-        inner_classes = {name: sym for name, sym in symbols.items() if "." in name and sym.kind == "class"}
+        inner_classes = {
+            name: sym
+            for name, sym in symbols.items()
+            if "." in name and sym.kind == "class"
+        }
 
         for inner_name, inner_symbol in inner_classes.items():
             # Find parent class name (everything before the last .)
@@ -307,7 +319,9 @@ def _extract_symbols_from_bytecode(
         for inner_name in inner_classes:
             del symbols[inner_name]
 
-    logger.debug("Extracted symbols from bytecode for %d packages", len(symbols_by_package))
+    logger.debug(
+        "Extracted symbols from bytecode for %d packages", len(symbols_by_package)
+    )
     return symbols_by_package
 
 
@@ -323,7 +337,7 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
     if not jvm_sig.startswith("("):
         return ""
 
-    param_part = jvm_sig[1:jvm_sig.index(")")]
+    param_part = jvm_sig[1 : jvm_sig.index(")")]
     if not param_part:
         return ""  # No parameters
 
@@ -342,7 +356,7 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
         if c == "L":
             # Object type: Lpackage/Class;
             end = param_part.index(";", i)
-            fqcn = param_part[i+1:end]
+            fqcn = param_part[i + 1 : end]
             # Take just the class name (last part after /)
             class_name = fqcn.split("/")[-1]
             params.append(class_name + "[]" * array_depth)
@@ -350,8 +364,14 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
         elif c in "BCDFIJSZ":
             # Primitive type
             primitives = {
-                "B": "byte", "C": "char", "D": "double", "F": "float",
-                "I": "int", "J": "long", "S": "short", "Z": "boolean"
+                "B": "byte",
+                "C": "char",
+                "D": "double",
+                "F": "float",
+                "I": "int",
+                "J": "long",
+                "S": "short",
+                "Z": "boolean",
             }
             params.append(primitives[c] + "[]" * array_depth)
             i += 1
@@ -389,10 +409,15 @@ def _extract_method_calls_from_bytecode(
     #       Code:
     #          0: invokevirtual #7  // Method bar:(I)V
 
-    classfile_pattern = re.compile(r"^Compiled from \"(.+)\"$")
-    class_pattern = re.compile(r"^(?:public |protected |private )?(?:static |final |abstract )*(?:class|interface|enum) ([^\s<{]+)")
-    method_pattern = re.compile(r"^\s+(?:public |protected |private |static |final |synchronized |native |abstract )*([^(]+)\(([^)]*)\);$")
-    invoke_pattern = re.compile(r"invoke(?:virtual|special|static|interface)\s+#\d+\s+//.*Method ([^:]+):(.+)")
+    class_pattern = re.compile(
+        r"^(?:public |protected |private )?(?:static |final |abstract )*(?:class|interface|enum) ([^\s<{]+)"
+    )
+    method_pattern = re.compile(
+        r"^\s+(?:public |protected |private |static |final |synchronized |native |abstract )*([^(]+)\(([^)]*)\);$"
+    )
+    invoke_pattern = re.compile(
+        r"invoke(?:virtual|special|static|interface)\s+#\d+\s+//.*Method ([^:]+):(.+)"
+    )
 
     # package -> class -> method_sig -> [called_sigs]
     calls_data: dict[str, dict[str, dict[str, list[str]]]] = defaultdict(
@@ -427,8 +452,11 @@ def _extract_method_calls_from_bytecode(
             # Build method signature
             if params_str:
                 # Simplify parameter types (remove package prefixes)
-                params = [p.strip().split(".")[-1].split("[]")[0] + ("[]" if "[]" in p else "")
-                         for p in params_str.split(",")]
+                params = [
+                    p.strip().split(".")[-1].split("[]")[0]
+                    + ("[]" if "[]" in p else "")
+                    for p in params_str.split(",")
+                ]
                 method_sig = f"{method_name}({','.join(params)})"
             else:
                 method_sig = f"{method_name}()"
@@ -453,15 +481,18 @@ def _extract_method_calls_from_bytecode(
             params = _jvm_sig_to_java(called_jvm_sig)
             called_sig = f"{called_method_name}({params})"
 
-            calls_data[current_package][current_class][current_method].append(called_sig)
+            calls_data[current_package][current_class][current_method].append(
+                called_sig
+            )
 
-    logger.debug("Extracted method calls from bytecode for %d packages", len(calls_data))
+    logger.debug(
+        "Extracted method calls from bytecode for %d packages", len(calls_data)
+    )
     return calls_data
 
 
 def _merge_method_calls(
-    graph: ProjectGraph,
-    calls_data: dict[str, dict[str, dict[str, list[str]]]]
+    graph: ProjectGraph, calls_data: dict[str, dict[str, dict[str, list[str]]]]
 ) -> None:
     """Merge bytecode-extracted method calls into graph symbols."""
     for package, classes in calls_data.items():

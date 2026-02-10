@@ -337,7 +337,11 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
     if not jvm_sig.startswith("("):
         return ""
 
-    param_part = jvm_sig[1 : jvm_sig.index(")")]
+    try:
+        param_part = jvm_sig[1 : jvm_sig.index(")")]
+    except ValueError:
+        return ""  # Malformed signature: missing closing paren
+
     if not param_part:
         return ""  # No parameters
 
@@ -355,7 +359,10 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
         c = param_part[i]
         if c == "L":
             # Object type: Lpackage/Class;
-            end = param_part.index(";", i)
+            try:
+                end = param_part.index(";", i)
+            except ValueError:
+                break  # Malformed signature: missing semicolon
             fqcn = param_part[i + 1 : end]
             # Take just the class name (last part after /)
             class_name = fqcn.split("/")[-1]

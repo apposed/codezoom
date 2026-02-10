@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 from codezoom.model import ExternalDep, ProjectGraph
@@ -77,6 +78,11 @@ def _extract_python_dependencies(
     # --- transitive deps from uv.lock ---
     dep_graph: dict[str, list[str]] = {}
     uv_lock_path = project_root / "uv.lock"
+
+    # Generate uv.lock if it doesn't exist
+    if not uv_lock_path.exists():
+        _generate_uv_lock(project_root)
+
     if uv_lock_path.exists():
         try:
             with open(uv_lock_path, "rb") as f:
@@ -108,3 +114,38 @@ def _extract_python_dependencies(
             logger.warning("Could not parse uv.lock: %s", e)
 
     return sorted(set(direct_deps)), dep_graph
+
+
+def _generate_uv_lock(project_root: Path) -> None:
+    """Generate uv.lock file if uv is available."""
+    try:
+        # Check if uv is available
+        result = subprocess.run(
+            ["uv", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            logger.info("uv not available, skipping lock file generation")
+            return
+
+        logger.info("Generating uv.lock for dependency resolution...")
+        result = subprocess.run(
+            ["uv", "lock"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes should be enough
+        )
+        if result.returncode == 0:
+            logger.info("Successfully generated uv.lock")
+        else:
+            logger.warning(
+                "Failed to generate uv.lock: %s",
+                result.stderr.strip() if result.stderr else "unknown error",
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.warning("Could not generate uv.lock: %s", e)
+    except Exception as e:
+        logger.warning("Unexpected error generating uv.lock: %s", e)

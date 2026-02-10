@@ -299,14 +299,19 @@
         }
 
         button {
-            padding: 8px;
+            padding: 6px;
             background: var(--button-bg);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 20px;
             min-width: 0;
+        }
+
+        button.small {
+            font-size: 16px;
+            padding: 2px 5px;
         }
 
         button:hover {
@@ -422,7 +427,6 @@
                 <div class="control-row-horizontal">
                     <button onclick="applyLayout('dagre', 'cose')" title="Hierarchical layout">&#x2935;&#xfe0f;</button> <!-- Arrow Pointing Rightwards Then Curving Downwards -->
                     <button onclick="applyLayout('cose')" title="Force-directed layout">&#x2b50;</button> <!-- Star -->
-                    <button onclick="cy.fit()" title="Fit view">&#x26f6;</button> <!-- Square Four Corners -->
                 </div>
             </div>
 
@@ -444,6 +448,15 @@
                         <option value="tokyo-night">Tokyo Night</option>
                         <option value="high-contrast">High Contrast</option>
                     </select>
+                </div>
+
+                <div class="control-row-horizontal" title="Zoom Level">
+                    <div>&#x1f50d;</div> <!-- Magnifying Glass Tilted Left -->
+                    <div class="slider-container">
+                        <input type="range" id="zoomSlider" min="10" max="300" value="100">
+                        <span id="zoomValue">100%</span>
+                    </div>
+                    <button onclick="cy.fit()" class="small" title="Fit view">&#x26f6;</button> <!-- Square Four Corners -->
                 </div>
                 <div class="control-row-horizontal" title="Node Size">
                     <div>&#x1f7e0;</div> <!-- Orange Circle -->
@@ -1052,6 +1065,7 @@
                 applyNodeColors();
                 applyVisibilityFilter();  // Apply filter after layout
                 cy.fit();
+                syncZoomSlider();  // Set up zoom event listener
             }, 100);
         }
 
@@ -1793,6 +1807,35 @@
                 cy.nodes().style('font-size', newFontSize + 'px');
             }
         });
+
+        // Zoom slider
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomValue = document.getElementById('zoomValue');
+
+        zoomSlider.addEventListener('input', function() {
+            const zoomPercent = this.value;
+            zoomValue.textContent = zoomPercent + '%';
+            if (cy) {
+                // Convert percentage to zoom level (100% = 1.0, 200% = 2.0, etc.)
+                // Zoom around the center of the viewport
+                cy.zoom({
+                    level: zoomPercent / 100,
+                    renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+                });
+            }
+        });
+
+        // Sync slider with zoom changes (e.g., from mouse wheel)
+        function syncZoomSlider() {
+            if (cy) {
+                cy.on('zoom', function() {
+                    const currentZoom = cy.zoom();
+                    const zoomPercent = Math.round(currentZoom * 100);
+                    zoomSlider.value = zoomPercent;
+                    zoomValue.textContent = zoomPercent + '%';
+                });
+            }
+        }
 
         // Visibility checkboxes
         const visibilityCheckboxes = [

@@ -35,3 +35,8 @@ jgo = { path = "../jgo", editable = true }
 
 [project.scripts]
 codezoom = "codezoom.cli:main"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/screenshots",
+]

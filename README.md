@@ -1,8 +1,8 @@
-# codezoom
+# Codezoom
 
 Multi-level code structure explorer — interactive drill-down HTML visualizations.
 
-codezoom generates a standalone HTML file that lets you explore a project's
+Codezoom generates a standalone HTML file that lets you explore a project's
 structure at multiple levels of detail. Click any node to drill down; use
 breadcrumb navigation to go back up.
 

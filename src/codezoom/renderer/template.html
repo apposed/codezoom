@@ -5,8 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>codezoom</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <!-- Layout extensions -->
+    <!-- dagre layout -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.2.2/cytoscape-dagre.js"></script>
+    <!-- fcose layout -->
+    <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+    <!-- tidytree layout -->
+    <script src="https://unpkg.com/cytoscape-tidytree@0.2.1/dist/cytoscape-tidytree.min.js"></script>
     <style>
         :root {
             /* Light theme (default) */
@@ -232,8 +240,8 @@
         }
 
         #sidebar {
-            width: 230px;
-            min-width: 230px;
+            width: 210px;
+            min-width: 210px;
             max-width: 600px;
             background: var(--bg-secondary);
             display: flex;
@@ -290,6 +298,26 @@
             display: flex;
             gap: 4px;
             align-items: flex-start;
+        }
+
+        .layout-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .layout-toolbar button {
+            width: 32px;
+            height: 32px;
+            padding: 4px;
+            font-size: 18px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* Add shadow to emojis for better visibility on all backgrounds */
+            text-shadow: 0 0 3px rgba(255, 255, 255, 0.8),
+                         0 0 3px rgba(0, 0, 0, 0.5);
         }
 
         p {
@@ -424,9 +452,18 @@
             <!-- Layout -->
             <div class="control-row">
                 <div class="section-label">Layout</div>
-                <div class="control-row-horizontal">
-                    <button onclick="applyLayout('dagre', 'cose')" title="Hierarchical layout">&#x2935;&#xfe0f;</button> <!-- Arrow Pointing Rightwards Then Curving Downwards -->
-                    <button onclick="applyLayout('cose')" title="Force-directed layout">&#x2b50;</button> <!-- Star -->
+                <div class="layout-toolbar">
+                    <button onclick="applyLayout('cose')" title="Force-directed (CoSE)">&#x2b50;</button> <!-- Star -->
+                    <button onclick="applyLayout('fcose')" title="Fast Force-directed (fCoSE) - Recommended">&#x26a1;</button> <!-- Lightning -->
+                    <button onclick="applyLayout('dagre', {'ranker': dagre_ranker()})" title="Hierarchy Downward (Dagre)">&#x2935;&#xfe0f;</button> <!-- Right Arrow Curving Down -->
+                    <button onclick="applyLayout('dagre', {'rankDir': 'LR', 'ranker': dagre_ranker()})" title="Hierarchy Rightward (Dagre)">&#x21aa;&#xfe0f;</button> <!-- Left Arrow Curving Right -->
+                    <button onclick="applyLayout('breadthfirst', breadthfirst_options())" title="Tree (top-down)">&#x1f332;</button> <!-- Evergreen Tree -->
+                    <button onclick="applyLayout('tidytree', tidytree_options())" title="Tidy tree layout">&#x1f334;</button> <!-- Palm Tree -->
+                    <button onclick="applyLayout('breadthfirst', {'circle': true})" title="Radial Tree">&#x1f300;</button> <!-- Cyclone/Spiral -->
+                    <button onclick="applyLayout('concentric', concentric_options())" title="Concentric rings by depth">&#x1f3af;</button> <!-- Bullseye/Target -->
+                    <button onclick="applyLayout('circle')" title="Simple circle">&#x2b55;</button> <!-- Hollow Red Circle -->
+                    <button onclick="applyLayout('grid')" title="Grid layout">&#x2b1c;</button> <!-- White Large Square -->
+                    <button onclick="applyLayout('random')" title="Random layout">&#x1f3b2;</button> <!-- Game Die -->
                 </div>
             </div>
 
@@ -530,7 +567,7 @@
                     <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
                     <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
                 </label>
-                <button onclick="unhideAll()" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button> <!-- Eye -->
+                <button onclick="unhideAll()" class="small" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button> <!-- Eye -->
             </div>
         </div>
     </div>
@@ -553,6 +590,93 @@
         // Set page title
         document.getElementById('titleText').textContent = 'codezoom | ' + data.project_name;
         document.title = data.project_name + ' — codezoom';
+
+        // Layout configuration
+        var dagre_ranker_index = 0;
+        function dagre_ranker() {
+            // Cycle through dagre ranker values.
+            // Note: 'network-simplex' seems equivalent to 'tight-tree' in all my tests.
+            const rankers = ['longest-path', 'tight-tree'];
+            return rankers[dagre_ranker_index++ % rankers.length];
+        }
+        var breadthfirst_index = 0;
+        function breadthfirst_options() {
+            const options = [
+                {grid: false, maximal: false},
+                {grid: true, maximal: false},
+                {grid: false, maximal: true},
+                {grid: true, maximal: true},
+            ];
+            return options[breadthfirst_index++ % options.length];
+        }
+        var tidytree_index = 0;
+        function tidytree_options() {
+            const options = [
+                {direction: 'TB'},
+                {direction: 'LR'},
+            ];
+            return options[tidytree_index++ % options.length];
+        }
+        var concentric_index = 0;
+        function concentric_options() {
+            // Different metrics for determining which ring a node goes on
+            // HIGHER values → center (Cytoscape concentric behavior)
+            // All metrics prioritize root node at center (return high value for root)
+            const metricDegree = node => {
+                if (node.data('nodeType') === 'root') return 10000; // Root gets highest value
+                return node.degree(); // High degree → center
+            };
+            const metricIndegree = node => {
+                if (node.data('nodeType') === 'root') return 10000;
+                return node.indegree(); // High indegree → center
+            };
+            const metricOutdegree = node => {
+                if (node.data('nodeType') === 'root') return 10000;
+                return node.outdegree(); // High outdegree → center
+            };
+            const metricType = node => {
+                // Invert the order: higher values toward center
+                const typeOrder = {'root': 10000, 'clickable': 700, 'regular': 600,
+                                 'class': 500, 'function': 400, 'method': 300,
+                                 'external-direct': 200, 'external-indirect': 100};
+                const nodeType = node.data('nodeType');
+                return typeOrder[nodeType] !== undefined ? typeOrder[nodeType] : 0;
+            };
+
+            // Level width functions - only use values that differ significantly
+            const lwSingle = () => 1;
+            const lwWide = nodes => Math.max(2, Math.ceil(nodes.length / 4));  // Wide spread
+            const lwMedium = nodes => Math.max(2, Math.ceil(nodes.length / 8)); // Medium
+            const lwTight = nodes => Math.max(2, Math.ceil(nodes.length / 16)); // Tight
+
+            // Create visually distinct combinations
+            const options = [
+                // Single ring per level (classic concentric)
+                {minNodeSpacing: 50, equidistant: false, levelWidth: lwSingle,
+                 concentric: metricDegree, startAngle: Math.PI/2},
+
+                // Wide spread, non-equidistant (organic feel)
+                {minNodeSpacing: 50, equidistant: false, levelWidth: lwWide,
+                 concentric: metricDegree, startAngle: Math.PI/2},
+
+                // Medium spread, varied angles
+                {minNodeSpacing: 50, equidistant: false, levelWidth: lwMedium,
+                 concentric: metricIndegree, startAngle: 0},
+
+                // Equidistant (geometric, requires low spacing)
+                {minNodeSpacing: 10, equidistant: true, levelWidth: lwMedium,
+                 concentric: metricDegree, startAngle: Math.PI/2},
+
+                // Tight spread, type-based ordering
+                {minNodeSpacing: 50, equidistant: false, levelWidth: lwTight,
+                 concentric: metricType, startAngle: Math.PI/4},
+
+                // Outdegree-based (sources toward center)
+                {minNodeSpacing: 50, equidistant: false, levelWidth: lwMedium,
+                 concentric: metricOutdegree, startAngle: -Math.PI/2}
+            ];
+            return options[concentric_index++ % options.length];
+        }
 
         // Theme configuration
         const themes = {
@@ -1727,11 +1851,71 @@
             document.getElementById('backBtn').disabled = history.length <= 1;
         }
 
-        function applyLayout(name, fallback) {
+        function applyLayout(name, options = {}) {
+            if (!cy) return;
+
+            // Sensible defaults for each layout
+            const defaults = {
+                cose: {
+                    nodeRepulsion: 400000,
+                    idealEdgeLength: 100,
+                    edgeElasticity: 100,
+                    animate: 'during',     // Show physics simulation animation
+                    refresh: 20,           // Refresh every 20ms for smoother animation
+                    numIter: 1000,         // More iterations for better result
+                    randomize: false       // Don't randomize positions
+                },
+                fcose: {
+                    quality: 'proof',     // 'default' or 'proof' (slower but better)
+                    nodeSeparation: 100,  // Min distance between nodes
+                    idealEdgeLength: 75,  // Preferred edge length
+                    edgeElasticity: 0.45  // Edge spring strength
+                },
+                dagre: {
+                    rankDir: 'TB',        // Top to bottom
+                    nodeSep: 50,          // Horizontal spacing
+                    edgeSep: 10,          // Edge spacing
+                    rankSep: 50           // Vertical spacing between ranks
+                },
+                breadthfirst: {
+                    directed: true,       // Use edge direction
+                    spacingFactor: 1.5    // Spacing multiplier
+                },
+                concentric: {
+                    // Defaults are overridden by concentric_options()
+                    // Just set common options here
+                    sweep: undefined,          // Auto-calculate sweep angle
+                    avoidOverlap: true,        // Prevent node overlaps
+                    clockwise: true            // Direction
+                },
+                circle: {
+                    // Note: Cytoscape's circle layout has a sort function parameter,
+                    // but it does not seem to ever affect the final graph layout.
+                    // Nodes are always arranged alphabetically.
+                },
+                tidytree: {},
+                grid: {
+                    rows: undefined,  // Auto-calculate
+                    cols: undefined,  // Auto-calculate
+                    condense: false,
+                    avoidOverlap: true
+                },
+                random: {}
+            };
+
+            // Merge defaults with user options
+            const layoutOptions = {
+                name: name,
+                animate: true,
+                animationDuration: 500,
+                ...(defaults[name] || {}),
+                ...options
+            };
             try {
-                cy.layout({name: name}).run();
+                cy.layout(layoutOptions).run();
             } catch(e) {
-                if (fallback) cy.layout({name: fallback}).run();
+                console.log(e);
+                if (name !== "cose") applyLayout("cose");
             }
         }
 

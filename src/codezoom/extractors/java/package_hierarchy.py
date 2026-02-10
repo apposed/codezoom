@@ -41,7 +41,7 @@ class JavaPackageHierarchyExtractor:
         if edges is None:
             return
 
-        _build_hierarchical_data(edges, graph)
+        _build_hierarchical_data(edges, classes_dir, graph)
 
         javap_path = shutil.which("javap")
         if javap_path:
@@ -210,14 +210,22 @@ def _scan_class_deps(
 
 def _build_hierarchical_data(
     edges: list[tuple[str, str]],
+    classes_dir: Path,
     graph: ProjectGraph,
 ) -> None:
-    """Build hierarchy inside *graph* from jdeps package edges."""
+    """Build hierarchy inside *graph* from jdeps package edges and filesystem."""
     # Collect all internal packages mentioned in edges.
     all_packages: set[str] = set()
     for src, tgt in edges:
         all_packages.add(src)
         all_packages.add(tgt)
+
+    # Also discover packages from the filesystem — jdeps only reports packages
+    # that have cross-package edges, missing leaf packages with no internal deps.
+    for class_file in classes_dir.rglob("*.class"):
+        pkg_path = class_file.relative_to(classes_dir).parent
+        if pkg_path != Path("."):
+            all_packages.add(str(pkg_path).replace("/", ".").replace("\\", "."))
 
     if not all_packages:
         return

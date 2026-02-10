@@ -157,7 +157,7 @@ _SUPER_CLASS_RE = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
 _METHOD_DECL_RE = re.compile(
     r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$"
 )
-_FLAGS_RE = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
+_FLAGS_RE = re.compile(r"^\s+flags:\s+(?:\(0x[0-9a-f]+\)\s+)?(.+)$")
 _LINE_NUMBER_RE = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
 
 
@@ -214,6 +214,12 @@ def _extract_symbols_from_bytecode(
 
             # Reset for new class
             current_classfile = Path(cfm.group(1))
+            # Derive package/class from the file path immediately — JDK 8's
+            # javap doesn't emit ``this_class:``, so we can't wait for it.
+            current_package, current_class_name = _resolve_class_identity(
+                current_classfile, classes_dir, ""
+            )
+            current_class_visibility = "package"
             current_class_line = None
             current_class_flags_pending = None
             current_inherits = []
@@ -222,7 +228,7 @@ def _extract_symbols_from_bytecode(
             in_line_number_table = False
             continue
 
-        # Extract full class name
+        # Extract full class name (JDK 11+ emits this; JDK 8 does not)
         tcm = _THIS_CLASS_RE.match(line)
         if tcm:
             fqcn_with_dollar = tcm.group(1).replace("/", ".")

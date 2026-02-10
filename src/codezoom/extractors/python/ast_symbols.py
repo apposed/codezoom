@@ -115,7 +115,7 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
     """Return symbol data for top-level functions and classes in *file_path*."""
     try:
         tree = ast.parse(file_path.read_text())
-    except Exception:
+    except (OSError, SyntaxError):
         return None
 
     results: dict[str, SymbolData] = {}

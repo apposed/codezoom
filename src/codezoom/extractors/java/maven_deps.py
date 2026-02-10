@@ -34,14 +34,14 @@ class JavaMavenDepsExtractor:
             pom = POM(pom_path)
             context = MavenContext()
             model = Model(pom, context)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.warning("Could not parse pom.xml: %s", e)
             return
 
         # Get direct dependencies (depth=1) for marking is_direct
         try:
             direct_deps, _ = model.dependencies(max_depth=1)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.warning("Could not resolve direct deps: %s", e)
             direct_deps = []
 
@@ -54,7 +54,7 @@ class JavaMavenDepsExtractor:
         # Resolve full transitive tree
         try:
             all_deps, tree = model.dependencies()
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.warning("Could not resolve transitive deps: %s", e)
             # Fall back to direct-only
             graph.external_deps = [

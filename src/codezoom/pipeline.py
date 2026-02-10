@@ -26,7 +26,7 @@ def _guess_project_name(project_dir: Path) -> str:
             if name:
                 # Normalise: PyPI allows hyphens but Python packages use underscores
                 return name.replace("-", "_")
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError):
             pass
 
     pom_path = project_dir / "pom.xml"
@@ -38,7 +38,7 @@ def _guess_project_name(project_dir: Path) -> str:
             name = pom.name or pom.artifactId
             if name:
                 return name
-        except Exception:
+        except (ImportError, OSError, ValueError):
             pass
 
     return project_dir.name.replace("-", "_")

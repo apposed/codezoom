@@ -71,7 +71,7 @@ def _extract_python_dependencies(
             )
             if pkg_name:
                 direct_deps.append(pkg_name.lower())
-    except Exception as e:
+    except (OSError, tomllib.TOMLDecodeError, KeyError) as e:
         logger.warning("Could not parse pyproject.toml: %s", e)
 
     # --- transitive deps from uv.lock ---
@@ -104,7 +104,7 @@ def _extract_python_dependencies(
                                     pkg_deps.append(dep_name)
                     if pkg_deps:
                         dep_graph[pkg_name] = pkg_deps
-        except Exception as e:
+        except (OSError, tomllib.TOMLDecodeError, KeyError) as e:
             logger.warning("Could not parse uv.lock: %s", e)
 
     return sorted(set(direct_deps)), dep_graph

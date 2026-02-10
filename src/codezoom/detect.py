@@ -46,7 +46,7 @@ def _read_config_exclude(project_dir: Path, project_name: str) -> list[str] | No
             with open(codezoom_toml, "rb") as f:
                 data = tomllib.load(f)
             return data.get("codezoom", {}).get("exclude", None)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError):
             pass
 
     # Fall back to [tool.codezoom] in pyproject.toml
@@ -56,7 +56,7 @@ def _read_config_exclude(project_dir: Path, project_name: str) -> list[str] | No
             with open(pyproject, "rb") as f:
                 data = tomllib.load(f)
             return data.get("tool", {}).get("codezoom", {}).get("exclude", None)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError):
             pass
 
     return None

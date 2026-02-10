@@ -62,6 +62,105 @@ class JavaAstSymbolsExtractor:
         _merge_method_calls(graph, method_calls)
 
 
+def _visibility_from_flags(flags_str: str) -> str:
+    """Determine visibility from ACC_* flags string."""
+    if "ACC_PUBLIC" in flags_str:
+        return "public"
+    if "ACC_PROTECTED" in flags_str:
+        return "protected"
+    if "ACC_PRIVATE" in flags_str:
+        return "private"
+    return "package"
+
+
+def _visibility_from_modifiers(modifiers: str) -> str:
+    """Determine visibility from Java modifier keywords."""
+    if "public" in modifiers:
+        return "public"
+    if "protected" in modifiers:
+        return "protected"
+    if "private" in modifiers:
+        return "private"
+    return "package"
+
+
+def _resolve_class_identity(
+    classfile: Path,
+    classes_dir: Path,
+    fqcn_with_dollar: str,
+) -> tuple[str, str]:
+    """Determine (package, class_name) from a classfile path and FQCN.
+
+    Returns (package, class_name).
+    """
+    try:
+        rel_path = classfile.relative_to(classes_dir)
+        package_path = rel_path.parent
+        package = str(package_path).replace("/", ".").replace("\\", ".")
+        if package == ".":
+            package = ""
+        class_name = classfile.stem.replace("$", ".")
+    except ValueError:
+        # Fallback if relative path fails
+        if "." in fqcn_with_dollar:
+            package = fqcn_with_dollar.rsplit(".", 1)[0]
+            class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace("$", ".")
+        else:
+            package = ""
+            class_name = fqcn_with_dollar.replace("$", ".")
+    return package, class_name
+
+
+def _save_current_class(
+    symbols_by_package: dict[str, dict[str, SymbolData]],
+    package: str | None,
+    class_name: str | None,
+    class_line: int | None,
+    inherits: list[str],
+    methods: dict[str, SymbolData],
+    visibility: str,
+) -> None:
+    """Save a completed class into the symbols dict."""
+    if class_name and package is not None:
+        symbols_by_package[package][class_name] = SymbolData(
+            name=class_name,
+            kind="class",
+            line=class_line,
+            inherits=inherits,
+            children=methods,
+            visibility=visibility,
+        )
+
+
+def _nest_inner_classes(symbols_by_package: dict[str, dict[str, SymbolData]]) -> None:
+    """Move inner classes (Foo.Bar) to be children of their parent classes."""
+    for symbols in symbols_by_package.values():
+        inner_classes = {
+            name: sym
+            for name, sym in symbols.items()
+            if "." in name and sym.kind == "class"
+        }
+
+        for inner_name, inner_symbol in inner_classes.items():
+            parent_name = inner_name.rsplit(".", 1)[0]
+            if parent_name in symbols:
+                symbols[parent_name].children[inner_name] = inner_symbol
+
+        for inner_name in inner_classes:
+            del symbols[inner_name]
+
+
+# Compiled regex patterns for javap -v parsing
+_CLASSFILE_RE = re.compile(r"^Classfile (.+)$")
+_THIS_CLASS_RE = re.compile(r"^\s+this_class:\s+#\d+\s+//\s+(.+)$")
+_SUPER_CLASS_RE = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
+_METHOD_DECL_RE = re.compile(
+    r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$"
+)
+_FLAGS_RE = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
+_LINE_NUMBER_RE = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
+
+
 def _extract_symbols_from_bytecode(
     javap_path: str, classes_dir: Path
 ) -> dict[str, dict[str, SymbolData]]:
@@ -82,31 +181,6 @@ def _extract_symbols_from_bytecode(
         logger.warning("javap -v -l failed: %s", result.stderr)
         return {}
 
-    # Parse javap -v output
-    # Format:
-    #   Classfile /path/to/Foo.class
-    #     flags: (0x0021) ACC_PUBLIC, ACC_SUPER
-    #     this_class: #X                         // pkg/Foo
-    #     super_class: #Y                        // java/lang/Object
-    #     interfaces: 1, fields: 2, methods: 3, attributes: 1
-    #   ...
-    #   public void method(int);
-    #     descriptor: (I)V
-    #     flags: (0x0001) ACC_PUBLIC
-    #     Code:
-    #       ...
-    #     LineNumberTable:
-    #       line 10: 0
-
-    classfile_pattern = re.compile(r"^Classfile (.+)$")
-    this_class_pattern = re.compile(r"^\s+this_class:\s+#\d+\s+//\s+(.+)$")
-    super_class_pattern = re.compile(r"^\s+super_class:\s+#\d+\s+//\s+(.+)$")
-    method_decl_pattern = re.compile(
-        r"^\s+((?:public |protected |private |static |final |synchronized |native |abstract )+)?([^(]+)\(([^)]*)\);$"
-    )
-    flags_pattern = re.compile(r"^\s+flags:\s+\(0x[0-9a-f]+\)\s+(.+)$")
-    line_number_pattern = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
-
     # package -> {class_name -> SymbolData}
     symbols_by_package: dict[str, dict[str, SymbolData]] = defaultdict(dict)
 
@@ -114,7 +188,7 @@ def _extract_symbols_from_bytecode(
     current_package = None
     current_class_name = None
     current_class_visibility = "package"
-    current_class_flags_pending = None  # Store flags seen before class name is known
+    current_class_flags_pending = None
     current_class_line = None
     current_inherits = []
     current_methods = {}
@@ -126,18 +200,17 @@ def _extract_symbols_from_bytecode(
 
     for line in result.stdout.splitlines():
         # New class file
-        cfm = classfile_pattern.match(line)
+        cfm = _CLASSFILE_RE.match(line)
         if cfm:
-            # Save previous class if any
-            if current_class_name and current_package is not None:
-                symbols_by_package[current_package][current_class_name] = SymbolData(
-                    name=current_class_name,
-                    kind="class",
-                    line=current_class_line,
-                    inherits=current_inherits,
-                    children=current_methods,
-                    visibility=current_class_visibility,
-                )
+            _save_current_class(
+                symbols_by_package,
+                current_package,
+                current_class_name,
+                current_class_line,
+                current_inherits,
+                current_methods,
+                current_class_visibility,
+            )
 
             # Reset for new class
             current_classfile = Path(cfm.group(1))
@@ -150,118 +223,69 @@ def _extract_symbols_from_bytecode(
             continue
 
         # Extract full class name
-        tcm = this_class_pattern.match(line)
+        tcm = _THIS_CLASS_RE.match(line)
         if tcm:
-            # Get the fully qualified class name with $ for inner classes
             fqcn_with_dollar = tcm.group(1).replace("/", ".")
-
-            # The package is everything except the last part(s) that form the class name
-            # Class name can have $ for inner classes (e.g., "Outer$Inner")
-            # Find where the class name starts (after the last directory separator in the file path)
             if current_classfile:
-                # Extract package from file path
-                try:
-                    rel_path = current_classfile.relative_to(classes_dir)
-                    package_path = rel_path.parent
-                    current_package = (
-                        str(package_path).replace("/", ".").replace("\\", ".")
-                    )
-                    if current_package == ".":
-                        current_package = ""
+                current_package, current_class_name = _resolve_class_identity(
+                    current_classfile, classes_dir, fqcn_with_dollar
+                )
 
-                    # Class name is the file name without .class, with $ converted to .
-                    class_file_name = current_classfile.stem  # removes .class
-                    current_class_name = class_file_name.replace("$", ".")
-                except ValueError:
-                    # Fallback if relative path fails
-                    if "." in fqcn_with_dollar:
-                        current_package = fqcn_with_dollar.rsplit(".", 1)[0]
-                        current_class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace(
-                            "$", "."
-                        )
-                    else:
-                        current_package = ""
-                        current_class_name = fqcn_with_dollar.replace("$", ".")
-
-            # Apply pending class-level flags if we have them
             if current_class_flags_pending:
-                if "ACC_PUBLIC" in current_class_flags_pending:
-                    current_class_visibility = "public"
-                elif "ACC_PROTECTED" in current_class_flags_pending:
-                    current_class_visibility = "protected"
-                elif "ACC_PRIVATE" in current_class_flags_pending:
-                    current_class_visibility = "private"
-                else:
-                    current_class_visibility = "package"
+                current_class_visibility = _visibility_from_flags(
+                    current_class_flags_pending
+                )
                 current_class_flags_pending = None
             continue
 
         # Extract superclass
-        scm = super_class_pattern.match(line)
+        scm = _SUPER_CLASS_RE.match(line)
         if scm:
             super_class = scm.group(1).split("/")[-1]
-            if super_class != "Object":  # Skip java.lang.Object
+            if super_class != "Object":
                 current_inherits.append(super_class)
             continue
 
         # Extract class-level flags for visibility
-        # These appear after "Classfile" but before "this_class" line
         if (
             not current_class_name
             and not current_methods
             and "flags:" in line
             and current_classfile
         ):
-            fm = flags_pattern.match(line)
+            fm = _FLAGS_RE.match(line)
             if fm:
                 current_class_flags_pending = fm.group(1)
             continue
 
         # Method declaration
-        mdm = method_decl_pattern.match(line)
+        mdm = _METHOD_DECL_RE.match(line)
         if mdm and current_class_name:
-            current_method_name = None  # Will be set if not a bridge method
+            current_method_name = None
 
             modifiers = mdm.group(1).strip() if mdm.group(1) else ""
-            method_name_part = (
-                mdm.group(2).strip().split()[-1]
-            )  # Last word is method name
+            method_name_part = mdm.group(2).strip().split()[-1]
             params_str = mdm.group(3).strip()
 
-            # For constructors, use simple class name (last part after dot)
-            # e.g., "foo.bar.FizzBuzz" -> "FizzBuzz"
             if "." in method_name_part:
                 method_name_part = method_name_part.split(".")[-1]
 
-            # Build method signature
             if params_str:
                 params = [p.strip().split(".")[-1] for p in params_str.split(",")]
                 method_sig = f"{method_name_part}({','.join(params)})"
             else:
                 method_sig = f"{method_name_part}()"
 
-            # Determine visibility from modifiers
-            if "public" in modifiers:
-                current_method_visibility = "public"
-            elif "protected" in modifiers:
-                current_method_visibility = "protected"
-            elif "private" in modifiers:
-                current_method_visibility = "private"
-            else:
-                current_method_visibility = "package"
-
-            # Store signature temporarily; will check flags before committing
+            current_method_visibility = _visibility_from_modifiers(modifiers)
             current_method_name = method_sig
             current_method_line = None
             in_line_number_table = False
             continue
 
         # Check method flags for ACC_BRIDGE (compiler-generated bridge methods)
-        # These appear after method declaration and before Code section
         if current_method_name and not in_line_number_table and "flags:" in line:
-            fm = flags_pattern.match(line)
+            fm = _FLAGS_RE.match(line)
             if fm and "ACC_BRIDGE" in fm.group(1):
-                # Skip bridge methods entirely
                 current_method_name = None
                 continue
 
@@ -272,15 +296,14 @@ def _extract_symbols_from_bytecode(
 
         # Extract line number (first line of method)
         if in_line_number_table and current_method_name:
-            lnm = line_number_pattern.match(line)
+            lnm = _LINE_NUMBER_RE.match(line)
             if lnm and current_method_line is None:
                 current_method_line = int(lnm.group(1))
-                # Save method
                 current_methods[current_method_name] = SymbolData(
                     name=current_method_name,
                     kind="method",
                     line=current_method_line,
-                    calls=[],  # Will be populated later
+                    calls=[],
                     visibility=current_method_visibility,
                 )
                 current_method_name = None
@@ -288,36 +311,17 @@ def _extract_symbols_from_bytecode(
             continue
 
     # Save last class
-    if current_class_name and current_package is not None:
-        symbols_by_package[current_package][current_class_name] = SymbolData(
-            name=current_class_name,
-            kind="class",
-            line=current_class_line,
-            inherits=current_inherits,
-            children=current_methods,
-            visibility=current_class_visibility,
-        )
+    _save_current_class(
+        symbols_by_package,
+        current_package,
+        current_class_name,
+        current_class_line,
+        current_inherits,
+        current_methods,
+        current_class_visibility,
+    )
 
-    # Post-process: nest inner classes as children of their parent classes
-    for package_name, symbols in symbols_by_package.items():
-        # Find inner classes (those with . in the name)
-        inner_classes = {
-            name: sym
-            for name, sym in symbols.items()
-            if "." in name and sym.kind == "class"
-        }
-
-        for inner_name, inner_symbol in inner_classes.items():
-            # Find parent class name (everything before the last .)
-            parent_name = inner_name.rsplit(".", 1)[0]
-
-            if parent_name in symbols:
-                # Move inner class to be a child of parent
-                symbols[parent_name].children[inner_name] = inner_symbol
-
-        # Remove inner classes from top level
-        for inner_name in inner_classes:
-            del symbols[inner_name]
+    _nest_inner_classes(symbols_by_package)
 
     logger.debug(
         "Extracted symbols from bytecode for %d packages", len(symbols_by_package)

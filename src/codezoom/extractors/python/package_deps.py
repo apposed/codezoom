@@ -59,6 +59,8 @@ def _extract_python_dependencies(
             data = tomllib.load(f)
 
         for dep in data.get("project", {}).get("dependencies", []):
+            if not isinstance(dep, str):
+                continue
             pkg_name = (
                 dep.split("[")[0]
                 .split(">")[0]
@@ -83,7 +85,10 @@ def _extract_python_dependencies(
             packages = lock_data.get("package", [])
             if isinstance(packages, list):
                 for pkg_info in packages:
-                    pkg_name = pkg_info.get("name", "").lower()
+                    raw_name = pkg_info.get("name", "")
+                    if not isinstance(raw_name, str):
+                        continue
+                    pkg_name = raw_name.lower()
                     if not pkg_name:
                         continue
                     pkg_deps: list[str] = []
@@ -91,7 +96,10 @@ def _extract_python_dependencies(
                     if isinstance(dependencies, list):
                         for dep in dependencies:
                             if isinstance(dep, dict):
-                                dep_name = dep.get("name", "").lower()
+                                raw_dep_name = dep.get("name", "")
+                                if not isinstance(raw_dep_name, str):
+                                    continue
+                                dep_name = raw_dep_name.lower()
                                 if dep_name and dep_name not in pkg_deps:
                                     pkg_deps.append(dep_name)
                     if pkg_deps:

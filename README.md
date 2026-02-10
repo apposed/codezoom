@@ -72,7 +72,7 @@ Not sure which to use? [Read this](https://jacobtomlinson.dev/posts/2025/python-
 ## Usage
 
 ```bash
-codezoom /path/to/project                     # auto-detect, output to <project>_deps.html
+codezoom /path/to/project                     # auto-detect, output to codezoom.html
 codezoom /path/to/project -o output.html      # custom output path
 codezoom /path/to/project --name "My Project" # custom display name
 codezoom /path/to/project --open              # open in browser after generating

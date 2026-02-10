@@ -136,7 +136,7 @@ def run(
         if ext.can_handle(project_dir):
             ext.extract(project_dir, graph)
 
-    out_path = output or (project_dir / f"{project_name}_deps.html")
+    out_path = output or (project_dir / "codezoom.html")
     render_html(graph, out_path)
 
     logger.info("Generated %s", out_path)

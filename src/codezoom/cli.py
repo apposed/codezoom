@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> None:
         "--output",
         type=Path,
         default=None,
-        help="Output HTML file path (default: <project>_deps.html)",
+        help="Output HTML file path (default: codezoom.html)",
     )
     parser.add_argument(
         "--name",

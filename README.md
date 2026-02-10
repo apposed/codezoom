@@ -16,16 +16,16 @@ Click any node to drill down. Use breadcrumb navigation to go back up.
 
 <table>
   <tr>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-dependencies.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-dependencies.png" width="400"></a><br><em>External dependencies (Python)</em></td>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/imagej-common-dependencies.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/imagej-common-dependencies.png" width="400"></a><br><em>External dependencies (Java)</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-dependencies.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-dependencies.png" width="400"></a><br><em>External dependencies (Python)</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/imagej-common-dependencies.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/imagej-common-dependencies.png" width="400"></a><br><em>External dependencies (Java)</em></td>
   </tr>
   <tr>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-submodules.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-submodules.png" width="400"></a><br><em>Project submodules</em></td>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-env.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-env.png" width="400"></a><br><em>A submodule's children</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-submodules.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-submodules.png" width="400"></a><br><em>Project submodules</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-env.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-env.png" width="400"></a><br><em>A submodule's children</em></td>
   </tr>
   <tr>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-cli-rich-formatters.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/jgo-cli-rich-formatters.png" width="400"></a><br><em>Single-file view (Python)</em></td>
-    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/imagej-common-net-imagej-DrawingTool.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/main/screenshots/imagej-common-net-imagej-DrawingTool.png" width="400"></a><br><em>Single-file view (Java)</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-cli-rich-formatters.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/jgo-cli-rich-formatters.png" width="400"></a><br><em>Single-file view (Python)</em></td>
+    <td align="center"><a href="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/imagej-common-net-imagej-DrawingTool.png"><img src="https://raw.githubusercontent.com/apposed/codezoom/2.0.1/screenshots/imagej-common-net-imagej-DrawingTool.png" width="400"></a><br><em>Single-file view (Java)</em></td>
     <td></td>
   </tr>
 </table>

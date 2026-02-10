@@ -68,7 +68,13 @@ class JavaMavenDepsExtractor:
         # Build adjacency list from the DependencyNode tree
         dep_graph: dict[str, list[str]] = {}
 
+        visited: set[int] = set()
+
         def _walk_tree(node):
+            node_id = id(node)
+            if node_id in visited:
+                return
+            visited.add(node_id)
             for child in node.children:
                 parent_key = f"{child.dep.groupId}:{child.dep.artifactId}"
                 if child.dep.scope not in (None, "compile", "runtime"):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from codezoom.extractors.python import is_python_project
 from codezoom.model import NodeData, ProjectGraph, SymbolData
 
 
@@ -12,7 +13,7 @@ class AstSymbolsExtractor:
     """Populate hierarchy leaf nodes with symbol (function/class/method) data."""
 
     def can_handle(self, project_dir: Path) -> bool:
-        return (project_dir / "pyproject.toml").exists()
+        return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
         src_dir = _find_source_dir(project_dir, graph.root_node_id)

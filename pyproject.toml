@@ -18,6 +18,10 @@ classifiers = [
     "Topic :: Software Development :: Documentation",
 ]
 
+dependencies = [
+    "pyyaml>=6.0",
+]
+
 [project.optional-dependencies]
 java = [
     "jgo>=2.0.0.dev0",

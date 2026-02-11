@@ -14,20 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 def _guess_project_name(project_dir: Path) -> str:
-    """Guess the project display name from pyproject.toml, pom.xml, or directory name."""
-    pyproject = project_dir / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            import tomllib
+    """Guess the project display name from pixi.toml, pyproject.toml, pom.xml, or directory name."""
+    # Try pixi.toml first (pixi manages the environment when present)
+    for toml_name in ("pixi.toml", "pyproject.toml"):
+        toml_path = project_dir / toml_name
+        if toml_path.exists():
+            try:
+                import tomllib
 
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-            name = data.get("project", {}).get("name")
-            if name:
-                # Normalise: PyPI allows hyphens but Python packages use underscores
-                return name.replace("-", "_")
-        except (OSError, tomllib.TOMLDecodeError, KeyError):
-            pass
+                with open(toml_path, "rb") as f:
+                    data = tomllib.load(f)
+                name = data.get("project", {}).get("name")
+                if name:
+                    # Normalise: PyPI allows hyphens but Python packages use underscores
+                    return name.replace("-", "_")
+            except (OSError, tomllib.TOMLDecodeError, KeyError):
+                pass
 
     pom_path = project_dir / "pom.xml"
     if pom_path.exists():
@@ -57,9 +59,9 @@ def _find_package_name(project_dir: Path) -> str | None:
     ``root_node_id`` from jdeps output.
     """
     # Java projects: root_node_id set by JavaPackageHierarchyExtractor.
-    if (project_dir / "pom.xml").exists() and not (
-        project_dir / "pyproject.toml"
-    ).exists():
+    from codezoom.extractors.python import is_python_project
+
+    if (project_dir / "pom.xml").exists() and not is_python_project(project_dir):
         return None
 
     _SKIP = {

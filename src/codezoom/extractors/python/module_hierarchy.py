@@ -9,6 +9,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+from codezoom.extractors.python import is_python_project
 from codezoom.model import NodeData, ProjectGraph
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class ModuleHierarchyExtractor:
         self._exclude = exclude
 
     def can_handle(self, project_dir: Path) -> bool:
-        return (project_dir / "pyproject.toml").exists()
+        return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
         src_dir = _find_source_dir(project_dir, graph.root_node_id)

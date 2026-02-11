@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from codezoom.extractors.base import Extractor
+from codezoom.extractors.python import is_python_project
 from codezoom.extractors.python.ast_symbols import AstSymbolsExtractor
 from codezoom.extractors.python.module_hierarchy import ModuleHierarchyExtractor
 from codezoom.extractors.python.package_deps import PackageDepsExtractor
@@ -14,7 +15,7 @@ def detect_extractors(project_dir: Path, project_name: str) -> list[Extractor]:
     """Return an ordered list of extractors applicable to *project_dir*."""
     extractors: list[Extractor] = []
 
-    if (project_dir / "pyproject.toml").exists():
+    if is_python_project(project_dir):
         # Read optional codezoom config
         exclude = _read_config_exclude(project_dir, project_name)
         extractors.append(PackageDepsExtractor())

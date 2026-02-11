@@ -1044,6 +1044,10 @@
 
         let cy = null;
 
+        // Drag with descendants state
+        let draggedSubtree = null;
+        let initialPositions = null;
+
         function getBorderStyleForVisibility(visibility) {
             // Map visibility to border style (UML convention)
             // public: solid, protected: dotted, package: double, private: dashed
@@ -1071,6 +1075,37 @@
             const g = parseInt(hex.substr(2, 2), 16);
             const b = parseInt(hex.substr(4, 2), 16);
             return (r + g + b) / 3 > 127;
+        }
+
+        function getDescendants(nodeId) {
+            // Recursively collect all descendants by following outgoing edges in the graph
+            const descendants = new Set([nodeId]);
+            const visited = new Set([nodeId]);
+            const toVisit = [nodeId];
+
+            while (toVisit.length > 0) {
+                const currentId = toVisit.pop();
+                const currentNode = cy.getElementById(currentId);
+
+                if (currentNode.length > 0) {
+                    // Get all outgoing edges (edges where this node is the source)
+                    const outgoingEdges = currentNode.connectedEdges().filter(edge => {
+                        return edge.source().id() === currentId;
+                    });
+
+                    // Add target nodes as descendants
+                    outgoingEdges.forEach(edge => {
+                        const targetId = edge.target().id();
+                        if (!visited.has(targetId)) {
+                            visited.add(targetId);
+                            descendants.add(targetId);
+                            toVisit.push(targetId);
+                        }
+                    });
+                }
+            }
+
+            return Array.from(descendants);
         }
 
         function applyColorsToNode(node, colors) {
@@ -1250,6 +1285,60 @@
                     node.addClass('user-hidden');
                     updateHiddenDisplay();
                 }
+            });
+
+            // Alt + drag to move node with all descendants
+            cy.on('grab', 'node', function(evt) {
+                const node = evt.target;
+                const nodeId = node.id();
+
+                // Check if Alt key is pressed
+                if (evt.originalEvent && evt.originalEvent.altKey) {
+                    // Get all descendants
+                    draggedSubtree = getDescendants(nodeId);
+
+                    // Store initial positions
+                    initialPositions = new Map();
+                    draggedSubtree.forEach(id => {
+                        const n = cy.getElementById(id);
+                        if (n.length > 0) {
+                            initialPositions.set(id, { x: n.position().x, y: n.position().y });
+                        }
+                    });
+                }
+            });
+
+            cy.on('drag', 'node', function(evt) {
+                if (draggedSubtree && initialPositions) {
+                    const node = evt.target;
+                    const nodeId = node.id();
+                    const initialPos = initialPositions.get(nodeId);
+
+                    if (initialPos) {
+                        // Calculate delta from initial position
+                        const delta = {
+                            x: node.position().x - initialPos.x,
+                            y: node.position().y - initialPos.y
+                        };
+
+                        // Move all descendants by the same delta
+                        draggedSubtree.forEach(id => {
+                            if (id !== nodeId) {
+                                const n = cy.getElementById(id);
+                                const initial = initialPositions.get(id);
+                                if (n.length > 0 && initial) {
+                                    n.position({ x: initial.x + delta.x, y: initial.y + delta.y });
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+
+            cy.on('free', 'node', function(evt) {
+                // Clear drag state when mouse is released
+                draggedSubtree = null;
+                initialPositions = null;
             });
 
             setTimeout(() => {

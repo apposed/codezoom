@@ -240,8 +240,8 @@
         }
 
         #sidebar {
-            width: 250px;
-            min-width: 210px;
+            width: 200px;
+            min-width: 200px;
             max-width: 600px;
             background: var(--bg-secondary);
             display: flex;
@@ -307,17 +307,42 @@
         }
 
         .layout-toolbar button {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             padding: 4px;
             font-size: 18px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
             /* Add shadow to emojis for better visibility on all backgrounds */
             text-shadow: 0 0 3px rgba(255, 255, 255, 0.8),
                          0 0 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .layout-toolbar button.has-cycle-indicator {
+            padding-top: 6px;
+        }
+
+        .cycle-indicator {
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1px;
+        }
+
+        .cycle-indicator span {
+            width: 4px;
+            height: 4px;
+            background: #f1c40f;
+            opacity: 0.35;
+        }
+
+        .cycle-indicator span.active {
+            opacity: 1;
         }
 
         p {
@@ -455,12 +480,12 @@
                 <div class="layout-toolbar">
                     <button onclick="applyLayout('cose')" title="Force-directed (CoSE)">&#x2b50;</button> <!-- Star -->
                     <button onclick="applyLayout('fcose')" title="Fast Force-directed (fCoSE) - Recommended">&#x26a1;</button> <!-- Lightning -->
-                    <button onclick="applyLayout('dagre', {'ranker': dagre_ranker()})" title="Hierarchy Downward (Dagre)">&#x2935;&#xfe0f;</button> <!-- Right Arrow Curving Down -->
-                    <button onclick="applyLayout('dagre', {'rankDir': 'LR', 'ranker': dagre_ranker()})" title="Hierarchy Rightward (Dagre)">&#x21aa;&#xfe0f;</button> <!-- Left Arrow Curving Right -->
-                    <button onclick="applyLayout('breadthfirst', breadthfirst_options())" title="Tree (top-down)">&#x1f332;</button> <!-- Evergreen Tree -->
-                    <button onclick="applyLayout('tidytree', tidytree_options())" title="Tidy tree layout">&#x1f334;</button> <!-- Palm Tree -->
+                    <button id="btn-dagre-down" onclick="applyLayout('dagre', {'ranker': dagre_ranker()})" title="Hierarchy Downward (Dagre)">&#x2935;&#xfe0f;</button> <!-- Right Arrow Curving Down -->
+                    <button id="btn-dagre-right" onclick="applyLayout('dagre', {'rankDir': 'LR', 'ranker': dagre_ranker()})" title="Hierarchy Rightward (Dagre)">&#x21aa;&#xfe0f;</button> <!-- Left Arrow Curving Right -->
+                    <button id="btn-breadthfirst" onclick="applyLayout('breadthfirst', breadthfirst_options())" title="Tree (top-down)">&#x1f332;</button> <!-- Evergreen Tree -->
+                    <button id="btn-tidytree" onclick="applyLayout('tidytree', tidytree_options())" title="Tidy tree layout">&#x1f334;</button> <!-- Palm Tree -->
                     <button onclick="applyLayout('breadthfirst', {'circle': true})" title="Radial Tree">&#x1f300;</button> <!-- Cyclone/Spiral -->
-                    <button onclick="applyLayout('concentric', concentric_options())" title="Concentric rings by depth">&#x1f3af;</button> <!-- Bullseye/Target -->
+                    <button id="btn-concentric" onclick="applyLayout('concentric', concentric_options())" title="Concentric rings by depth">&#x1f3af;</button> <!-- Bullseye/Target -->
                     <button onclick="applyLayout('circle')" title="Simple circle">&#x2b55;</button> <!-- Hollow Red Circle -->
                     <button onclick="applyLayout('grid')" title="Grid layout">&#x2b1c;</button> <!-- White Large Square -->
                     <button onclick="applyLayout('random')" title="Random layout">&#x1f3b2;</button> <!-- Game Die -->
@@ -597,7 +622,10 @@
             // Cycle through dagre ranker values.
             // Note: 'network-simplex' seems equivalent to 'tight-tree' in all my tests.
             const rankers = ['longest-path', 'tight-tree'];
-            return rankers[dagre_ranker_index++ % rankers.length];
+            const result = rankers[dagre_ranker_index++ % rankers.length];
+            updateCycleIndicator('btn-dagre-down', dagre_ranker_index, rankers.length);
+            updateCycleIndicator('btn-dagre-right', dagre_ranker_index, rankers.length);
+            return result;
         }
         var breadthfirst_index = 0;
         function breadthfirst_options() {
@@ -607,7 +635,9 @@
                 {grid: false, maximal: true},
                 {grid: true, maximal: true},
             ];
-            return options[breadthfirst_index++ % options.length];
+            const result = options[breadthfirst_index++ % options.length];
+            updateCycleIndicator('btn-breadthfirst', breadthfirst_index, options.length);
+            return result;
         }
         var tidytree_index = 0;
         function tidytree_options() {
@@ -615,7 +645,9 @@
                 {direction: 'TB'},
                 {direction: 'LR'},
             ];
-            return options[tidytree_index++ % options.length];
+            const result = options[tidytree_index++ % options.length];
+            updateCycleIndicator('btn-tidytree', tidytree_index, options.length);
+            return result;
         }
         var concentric_index = 0;
         function concentric_options() {
@@ -675,8 +707,43 @@
                 {minNodeSpacing: 50, equidistant: false, levelWidth: lwMedium,
                  concentric: metricOutdegree, startAngle: -Math.PI/2}
             ];
-            return options[concentric_index++ % options.length];
+            const result = options[concentric_index++ % options.length];
+            updateCycleIndicator('btn-concentric', concentric_index, options.length);
+            return result;
         }
+
+        // Cycle indicator helpers
+        function createCycleIndicator(buttonId, count) {
+            const btn = document.getElementById(buttonId);
+            if (!btn) return;
+            btn.classList.add('has-cycle-indicator');
+            const div = document.createElement('div');
+            div.className = 'cycle-indicator';
+            for (let i = 0; i < count; i++) {
+                const span = document.createElement('span');
+                if (i === 0) span.classList.add('active');
+                div.appendChild(span);
+            }
+            btn.appendChild(div);
+        }
+
+        function updateCycleIndicator(buttonId, currentIndex, count) {
+            const btn = document.getElementById(buttonId);
+            if (!btn) return;
+            const spans = btn.querySelectorAll('.cycle-indicator span');
+            spans.forEach((s, i) => {
+                s.classList.toggle('active', i === currentIndex % count);
+            });
+            const baseTitle = btn.title.replace(/\s*\(preset \d+ of \d+\)/, '');
+            btn.title = baseTitle + ' (preset ' + ((currentIndex % count) + 1) + ' of ' + count + ')';
+        }
+
+        // Initialize cycle indicators
+        createCycleIndicator('btn-dagre-down', 2);
+        createCycleIndicator('btn-dagre-right', 2);
+        createCycleIndicator('btn-breadthfirst', 4);
+        createCycleIndicator('btn-tidytree', 2);
+        createCycleIndicator('btn-concentric', 6);
 
         // Theme configuration
         const themes = {

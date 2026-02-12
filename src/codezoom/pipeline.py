@@ -43,7 +43,61 @@ def _guess_project_name(project_dir: Path) -> str:
         except (ImportError, OSError, ValueError):
             pass
 
+    # Gradle: try settings.gradle.kts or build.gradle.kts for project name
+    for settings_name in ("settings.gradle.kts", "settings.gradle"):
+        settings_path = project_dir / settings_name
+        if settings_path.exists():
+            name = _guess_gradle_name(settings_path)
+            if name:
+                return name
+
+    for build_name in ("build.gradle.kts", "build.gradle"):
+        build_path = project_dir / build_name
+        if build_path.exists():
+            name = _guess_gradle_name_from_build(build_path)
+            if name:
+                return name
+
     return project_dir.name.replace("-", "_")
+
+
+def _guess_gradle_name(settings_path: Path) -> str | None:
+    """Extract project name from settings.gradle.kts or settings.gradle."""
+    import re
+
+    try:
+        content = settings_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    # Try rootProject.name = "..."
+    m = re.search(r'rootProject\.name\s*=\s*"([^"]+)"', content)
+    if m:
+        return m.group(1)
+
+    # Try name = "..." inside qupathExtension or qupath block
+    m = re.search(r'name\s*=\s*"([^"]+)"', content)
+    if m:
+        return m.group(1)
+
+    return None
+
+
+def _guess_gradle_name_from_build(build_path: Path) -> str | None:
+    """Extract project name from build.gradle(.kts) top-level assignment."""
+    import re
+
+    try:
+        content = build_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    # Look for a top-level name assignment: name = "..."
+    m = re.search(r'^name\s*=\s*"([^"]+)"', content, re.MULTILINE)
+    if m:
+        return m.group(1)
+
+    return None
 
 
 def _find_package_name(project_dir: Path) -> str | None:
@@ -58,10 +112,17 @@ def _find_package_name(project_dir: Path) -> str | None:
     For Java projects we return None — the hierarchy extractor computes
     ``root_node_id`` from jdeps output.
     """
-    # Java projects: root_node_id set by JavaPackageHierarchyExtractor.
     from codezoom.extractors.python import is_python_project
 
+    # Maven projects: root_node_id set by JavaPackageHierarchyExtractor.
     if (project_dir / "pom.xml").exists() and not is_python_project(project_dir):
+        return None
+
+    # Gradle projects: root_node_id set by JavaPackageHierarchyExtractor.
+    if (
+        (project_dir / "build.gradle.kts").exists()
+        or (project_dir / "build.gradle").exists()
+    ) and not is_python_project(project_dir):
         return None
 
     _SKIP = {

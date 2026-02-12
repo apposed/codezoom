@@ -18,7 +18,11 @@ class JavaAstSymbolsExtractor:
     """Populate hierarchy leaf nodes with Java symbol data from compiled bytecode."""
 
     def can_handle(self, project_dir: Path) -> bool:
-        return (project_dir / "pom.xml").exists()
+        return (
+            (project_dir / "pom.xml").exists()
+            or (project_dir / "build.gradle").exists()
+            or (project_dir / "build.gradle.kts").exists()
+        )
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
         javap_path = shutil.which("javap")
@@ -29,11 +33,13 @@ class JavaAstSymbolsExtractor:
             )
             return
 
-        classes_dir = project_dir / "target" / "classes"
-        if not classes_dir.is_dir():
+        from codezoom.extractors.java import _find_classes_dir
+
+        classes_dir = _find_classes_dir(project_dir)
+        if classes_dir is None:
             logger.warning(
-                "target/classes not found — run `mvn compile` first. "
-                "Skipping Java symbol extraction."
+                "Compiled classes not found — run `mvn compile` or "
+                "`gradle build` first. Skipping Java symbol extraction."
             )
             return
 

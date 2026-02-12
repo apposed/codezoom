@@ -594,6 +594,14 @@
                 </label>
                 <button onclick="unhideAll()" class="small" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button> <!-- Eye -->
             </div>
+
+            <!-- Highlight -->
+            <div class="control-row">
+                <div class="section-label">Highlight</div>
+                <p>Shift+click or middle-click a node to highlight its connections.</p>
+                <p>Click additional nodes for multi-color comparison.</p>
+                <button onclick="clearAllHighlights()" class="small" title="Clear all highlights">&#x2728; Clear Highlights</button> <!-- Sparkles -->
+            </div>
         </div>
     </div>
 
@@ -1044,6 +1052,33 @@
 
         let cy = null;
 
+        // Middle-click highlight state
+        const highlightColors = ['#f39c12', '#3498db', '#e74c3c', '#2ecc71']; // amber, blue, red, green
+        let highlightSelections = []; // array of { nodeId, colorIndex }
+
+        function blendColors(base, overlay, amount) {
+            // Parse a color string (hex or rgb()) into [r, g, b]
+            const parseColor = (color) => {
+                if (typeof color !== 'string') return [128, 128, 128];
+                color = color.trim();
+                const rgbMatch = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+                if (rgbMatch) {
+                    return [parseInt(rgbMatch[1]), parseInt(rgbMatch[2]), parseInt(rgbMatch[3])];
+                }
+                const hex = color.replace('#', '');
+                if (hex.length === 3) {
+                    return [parseInt(hex[0]+hex[0],16), parseInt(hex[1]+hex[1],16), parseInt(hex[2]+hex[2],16)];
+                }
+                return [parseInt(hex.substr(0,2),16), parseInt(hex.substr(2,2),16), parseInt(hex.substr(4,2),16)];
+            };
+            const b = parseColor(base);
+            const o = parseColor(overlay);
+            const r = Math.round(b[0] + (o[0] - b[0]) * amount);
+            const g = Math.round(b[1] + (o[1] - b[1]) * amount);
+            const bl = Math.round(b[2] + (o[2] - b[2]) * amount);
+            return '#' + [r, g, bl].map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
+        }
+
         // Drag with descendants state
         let draggedSubtree = null;
         let initialPositions = null;
@@ -1150,6 +1185,161 @@
             });
         }
 
+        function toggleHighlight(nodeId) {
+            const existingIdx = highlightSelections.findIndex(s => s.nodeId === nodeId);
+            if (existingIdx !== -1) {
+                // Remove highlight from this node
+                highlightSelections.splice(existingIdx, 1);
+            } else {
+                // Find the next available color index
+                const usedIndices = new Set(highlightSelections.map(s => s.colorIndex));
+                let colorIndex = 0;
+                while (usedIndices.has(colorIndex) && colorIndex < highlightColors.length) {
+                    colorIndex++;
+                }
+                colorIndex = colorIndex % highlightColors.length;
+                highlightSelections.push({ nodeId, colorIndex });
+            }
+            applyHighlights();
+        }
+
+        function clearAllHighlights() {
+            highlightSelections = [];
+            applyHighlights();
+        }
+
+        function applyHighlights() {
+            if (!cy) return;
+            const colors = themes[currentTheme];
+
+            // Reset all nodes to base theme colors
+            applyNodeColors();
+
+            // Reset all edges to base style
+            cy.edges().forEach(edge => {
+                if (edge.data('type') === 'inherits') {
+                    edge.style({
+                        'line-color': colors.nodeRoot,
+                        'target-arrow-color': colors.nodeRoot,
+                        'width': 3,
+                        'opacity': 0.7
+                    });
+                } else {
+                    edge.style({
+                        'line-color': colors.edgeLine,
+                        'target-arrow-color': colors.edgeArrow,
+                        'width': 2,
+                        'opacity': 0.7
+                    });
+                }
+            });
+
+            // Reset all node opacities and underlay (unless user-hidden)
+            cy.nodes().forEach(node => {
+                if (!userHiddenNodes.has(node.id())) {
+                    node.style('opacity', 1);
+                }
+                node.style('underlay-opacity', 0);
+            });
+
+            if (highlightSelections.length === 0) return;
+
+            // Build neighbor hit map: nodeId -> array of colorIndex values
+            const neighborHits = {};
+            const highlightedEdges = new Set();
+
+            // Prune selections whose nodes no longer exist in the view
+            highlightSelections = highlightSelections.filter(s => cy.getElementById(s.nodeId).length > 0);
+
+            for (const sel of highlightSelections) {
+                const node = cy.getElementById(sel.nodeId);
+                if (node.length === 0) continue;
+
+                const connectedEdges = node.connectedEdges();
+                connectedEdges.forEach(edge => {
+                    highlightedEdges.add(edge.id());
+                    // Style the edge
+                    const hColor = highlightColors[sel.colorIndex];
+                    edge.style({
+                        'line-color': hColor,
+                        'target-arrow-color': hColor,
+                        'opacity': 1.0,
+                        'width': 3
+                    });
+
+                    // Find the neighbor node (the other end of the edge)
+                    edge.connectedNodes().forEach(n => {
+                        if (n.id() !== sel.nodeId) {
+                            if (!neighborHits[n.id()]) neighborHits[n.id()] = [];
+                            neighborHits[n.id()].push(sel.colorIndex);
+                        }
+                    });
+                });
+            }
+
+            // Apply styling to highlighted (clicked) nodes
+            const highlightedNodeIds = new Set(highlightSelections.map(s => s.nodeId));
+
+            for (const sel of highlightSelections) {
+                const node = cy.getElementById(sel.nodeId);
+                if (node.length === 0) continue;
+                const hColor = highlightColors[sel.colorIndex];
+                const baseBg = node.style('background-color');
+                node.style({
+                    'background-color': blendColors(baseBg, hColor, 0.65),
+                    'border-color': hColor,
+                    'border-width': 6,
+                    'border-style': 'solid',
+                    'underlay-color': hColor,
+                    'underlay-opacity': 0.4,
+                    'underlay-padding': 8,
+                    'opacity': 1
+                });
+            }
+
+            // Apply styling to neighbor nodes
+            for (const [nId, colorIndices] of Object.entries(neighborHits)) {
+                if (highlightedNodeIds.has(nId)) continue; // skip nodes that are themselves highlighted
+                const node = cy.getElementById(nId);
+                if (node.length === 0) continue;
+
+                let baseBg = node.style('background-color');
+                const hitCount = colorIndices.length;
+
+                if (hitCount === 1) {
+                    const hColor = highlightColors[colorIndices[0]];
+                    node.style({
+                        'background-color': blendColors(baseBg, hColor, 0.2),
+                        'border-color': hColor,
+                        'border-width': 2,
+                        'opacity': 1
+                    });
+                } else {
+                    // Multiple highlights touch this neighbor — blend each sequentially
+                    const uniqueColors = [...new Set(colorIndices)];
+                    let blended = baseBg;
+                    for (const ci of uniqueColors) {
+                        blended = blendColors(blended, highlightColors[ci], 0.35);
+                    }
+                    node.style({
+                        'background-color': blended,
+                        'border-color': highlightColors[uniqueColors[0]],
+                        'border-width': 3,
+                        'opacity': 1
+                    });
+                }
+            }
+
+            // Dim unrelated nodes
+            cy.nodes().forEach(node => {
+                const nId = node.id();
+                if (highlightedNodeIds.has(nId)) return;
+                if (neighborHits[nId]) return;
+                if (userHiddenNodes.has(nId)) return;
+                node.style('opacity', 0.4);
+            });
+        }
+
         function initCytoscape() {
             if (cy) cy.destroy();
 
@@ -1241,11 +1431,19 @@
                 const node = evt.target;
                 const colors = themes[currentTheme];
                 applyColorsToNode(node, colors);
+                // Reapply highlights so highlighted/neighbor tints aren't lost
+                if (highlightSelections.length > 0) applyHighlights();
             });
 
             cy.on('tap', 'node', function(evt) {
                 const node = evt.target;
                 const nodeId = node.id();
+
+                // Shift+click: toggle highlight instead of drilling in
+                if (evt.originalEvent.shiftKey) {
+                    toggleHighlight(nodeId);
+                    return;
+                }
 
                 const hasChildren = hierarchy[nodeId] && hierarchy[nodeId].children && hierarchy[nodeId].children.length > 0;
                 const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
@@ -1265,6 +1463,14 @@
 
                 if (hasChildren || hasFunctions || isClickableClass) {
                     drillInto(nodeId);
+                }
+            });
+
+            // Shift+click on background: clear all highlights
+            cy.on('tap', function(evt) {
+                if (evt.target !== cy) return;
+                if (evt.originalEvent.shiftKey) {
+                    clearAllHighlights();
                 }
             });
 
@@ -1341,9 +1547,43 @@
                 initialPositions = null;
             });
 
+            // Middle-click handling via native DOM events
+            // (Cytoscape.js only has built-in events for left-click and right-click)
+            const cyContainer = document.getElementById('cy');
+            cyContainer.addEventListener('mousedown', function(e) {
+                if (e.button === 1) e.preventDefault();
+            });
+            cyContainer.addEventListener('auxclick', function(e) {
+                if (e.button !== 1) return;
+                e.preventDefault();
+
+                // Get click position relative to the container
+                const rect = cyContainer.getBoundingClientRect();
+                const renderedX = e.clientX - rect.left;
+                const renderedY = e.clientY - rect.top;
+
+                // Find node under cursor using rendered bounding boxes
+                let clickedNode = null;
+                cy.nodes().forEach(function(node) {
+                    if (node.hidden()) return;
+                    const bb = node.renderedBoundingBox();
+                    if (renderedX >= bb.x1 && renderedX <= bb.x2 &&
+                        renderedY >= bb.y1 && renderedY <= bb.y2) {
+                        clickedNode = node;
+                    }
+                });
+
+                if (clickedNode) {
+                    toggleHighlight(clickedNode.id());
+                } else {
+                    clearAllHighlights();
+                }
+            });
+
             setTimeout(() => {
                 applyNodeColors();
                 applyVisibilityFilter();  // Apply filter after layout
+                if (highlightSelections.length > 0) applyHighlights();
                 cy.fit();
                 syncZoomSlider();  // Set up zoom event listener
             }, 100);

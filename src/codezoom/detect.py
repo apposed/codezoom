@@ -33,6 +33,19 @@ def detect_extractors(project_dir: Path, project_name: str) -> list[Extractor]:
         extractors.append(JavaPackageHierarchyExtractor())
         extractors.append(JavaAstSymbolsExtractor())
 
+    if (project_dir / "build.gradle.kts").exists() or (
+        project_dir / "build.gradle"
+    ).exists():
+        from codezoom.extractors.gradle import (
+            GradleDepsExtractor,
+            GradlePackageHierarchyExtractor,
+            GradleSourceSymbolsExtractor,
+        )
+
+        extractors.append(GradleDepsExtractor())
+        extractors.append(GradlePackageHierarchyExtractor())
+        extractors.append(GradleSourceSymbolsExtractor())
+
     return extractors
 
 

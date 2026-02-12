@@ -18,7 +18,11 @@ class JavaPackageHierarchyExtractor:
     """Populate hierarchy with Java package tree and inter-package imports."""
 
     def can_handle(self, project_dir: Path) -> bool:
-        return (project_dir / "pom.xml").exists()
+        return (
+            (project_dir / "pom.xml").exists()
+            or (project_dir / "build.gradle").exists()
+            or (project_dir / "build.gradle.kts").exists()
+        )
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
         jdeps_path = shutil.which("jdeps")
@@ -29,11 +33,13 @@ class JavaPackageHierarchyExtractor:
             )
             return
 
-        classes_dir = project_dir / "target" / "classes"
-        if not classes_dir.is_dir():
+        from codezoom.extractors.java import _find_classes_dir
+
+        classes_dir = _find_classes_dir(project_dir)
+        if classes_dir is None:
             logger.warning(
-                "target/classes not found — run `mvn compile` first. "
-                "Skipping package hierarchy."
+                "Compiled classes not found — run `mvn compile` or "
+                "`gradle build` first. Skipping package hierarchy."
             )
             return
 

@@ -22,29 +22,25 @@ def detect_extractors(project_dir: Path, project_name: str) -> list[Extractor]:
         extractors.append(ModuleHierarchyExtractor(exclude=exclude))
         extractors.append(AstSymbolsExtractor())
 
-    if (project_dir / "pom.xml").exists():
+    is_maven = (project_dir / "pom.xml").exists()
+    is_gradle = (project_dir / "build.gradle.kts").exists() or (
+        project_dir / "build.gradle"
+    ).exists()
+
+    if is_maven or is_gradle:
         from codezoom.extractors.java import (
+            GradleDepsExtractor,
             JavaAstSymbolsExtractor,
             JavaMavenDepsExtractor,
             JavaPackageHierarchyExtractor,
         )
 
-        extractors.append(JavaMavenDepsExtractor())
+        if is_maven:
+            extractors.append(JavaMavenDepsExtractor())
+        if is_gradle:
+            extractors.append(GradleDepsExtractor())
         extractors.append(JavaPackageHierarchyExtractor())
         extractors.append(JavaAstSymbolsExtractor())
-
-    if (project_dir / "build.gradle.kts").exists() or (
-        project_dir / "build.gradle"
-    ).exists():
-        from codezoom.extractors.gradle import (
-            GradleDepsExtractor,
-            GradlePackageHierarchyExtractor,
-            GradleSourceSymbolsExtractor,
-        )
-
-        extractors.append(GradleDepsExtractor())
-        extractors.append(GradlePackageHierarchyExtractor())
-        extractors.append(GradleSourceSymbolsExtractor())
 
     return extractors
 

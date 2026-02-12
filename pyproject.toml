@@ -26,9 +26,6 @@ dependencies = [
 java = [
     "jgo>=2.0.0.dev0",
 ]
-gradle = [
-    "javalang",
-]
 
 [dependency-groups]
 dev = [

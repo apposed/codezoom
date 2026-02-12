@@ -84,7 +84,7 @@ def _guess_gradle_name(settings_path: Path) -> str | None:
 
 
 def _guess_gradle_name_from_build(build_path: Path) -> str | None:
-    """Extract project name from build.gradle.kts qupathExtension block."""
+    """Extract project name from build.gradle(.kts) top-level assignment."""
     import re
 
     try:
@@ -92,12 +92,8 @@ def _guess_gradle_name_from_build(build_path: Path) -> str | None:
     except OSError:
         return None
 
-    # Look for name = "..." inside qupathExtension block
-    m = re.search(
-        r'qupathExtension\s*\{[^}]*?name\s*=\s*"([^"]+)"',
-        content,
-        re.DOTALL,
-    )
+    # Look for a top-level name assignment: name = "..."
+    m = re.search(r'^name\s*=\s*"([^"]+)"', content, re.MULTILINE)
     if m:
         return m.group(1)
 
@@ -122,7 +118,7 @@ def _find_package_name(project_dir: Path) -> str | None:
     if (project_dir / "pom.xml").exists() and not is_python_project(project_dir):
         return None
 
-    # Gradle projects: root_node_id set by GradlePackageHierarchyExtractor.
+    # Gradle projects: root_node_id set by JavaPackageHierarchyExtractor.
     if (
         (project_dir / "build.gradle.kts").exists()
         or (project_dir / "build.gradle").exists()

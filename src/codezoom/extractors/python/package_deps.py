@@ -52,7 +52,44 @@ def _extract_python_dependencies(
     # Pixi projects take priority (pixi manages the environment)
     if (project_root / "pixi.toml").exists():
         return _extract_pixi_dependencies(project_root)
-    return _extract_uv_dependencies(project_root)
+    direct, graph = _extract_uv_dependencies(project_root)
+    # Fall back to setup.py if pyproject.toml didn't yield direct deps
+    if not direct and (project_root / "setup.py").exists():
+        direct = _extract_setup_py_dependencies(project_root / "setup.py")
+    return direct, graph
+
+
+# ---------------------------------------------------------------------------
+# setup.py path (legacy)
+# ---------------------------------------------------------------------------
+
+
+def _extract_setup_py_dependencies(setup_py: Path) -> list[str]:
+    """Extract install_requires from a legacy setup.py using AST inspection."""
+    import ast
+
+    try:
+        tree = ast.parse(setup_py.read_text())
+    except (OSError, SyntaxError) as e:
+        logger.warning("Could not parse setup.py: %s", e)
+        return []
+
+    deps: list[str] = []
+    for node in ast.walk(tree):
+        # Look for setup(..., install_requires=[...], ...)
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "install_requires":
+                continue
+            if not isinstance(kw.value, ast.List):
+                continue
+            for elt in kw.value.elts:
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                    pkg_name = _parse_requirement_name(elt.value)
+                    if pkg_name:
+                        deps.append(pkg_name)
+    return sorted(set(deps))
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +291,7 @@ def _extract_uv_dependencies(
 
     # --- direct deps from pyproject.toml ---
     direct_deps: list[str] = []
+    data: dict = {}
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
@@ -278,8 +316,8 @@ def _extract_uv_dependencies(
     dep_graph: dict[str, list[str]] = {}
     uv_lock_path = project_root / "uv.lock"
 
-    # Generate uv.lock if it doesn't exist
-    if not uv_lock_path.exists():
+    # Generate uv.lock if it doesn't exist and pyproject.toml has a [project] table
+    if not uv_lock_path.exists() and "project" in data:
         _generate_uv_lock(project_root)
 
     if uv_lock_path.exists():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import warnings
 from pathlib import Path
 
 from codezoom.extractors.python import is_python_project
@@ -115,7 +116,9 @@ def _get_python_visibility(name: str) -> str:
 def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
     """Return symbol data for top-level functions and classes in *file_path*."""
     try:
-        tree = ast.parse(file_path.read_text())
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(file_path.read_text())
     except (OSError, SyntaxError):
         return None
 

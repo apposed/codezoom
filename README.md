@@ -183,10 +183,10 @@ hierarchy.
 - **Configuration**: Via `.codezoom.toml` or `[tool.codezoom]` in `pyproject.toml`
 
 ### Java
-- **Detection**: Presence of `pom.xml`
+- **Detection**: Presence of `pom.xml` or `build.gradle.kts` or `build.gradle`
 - **Prerequisites**:
   - JDK installed (for `jdeps` and `javap`)
-  - Project compiled (`mvn compile`)
+  - Project compiled (`mvn compile` or `./gradlew build`)
   - `pip install codezoom[java]` for dependency extraction
 - **Dependencies**: Maven dependencies via `jgo` (direct + transitive with scope filtering)
 - **Hierarchy**: Package tree via `jdeps` with inter-package dependencies

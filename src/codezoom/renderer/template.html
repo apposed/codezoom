@@ -453,6 +453,21 @@
             color: var(--text-primary);
             width: 100%;
         }
+
+        #edge-tooltip {
+            position: fixed;
+            display: none;
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 6px var(--shadow-color);
+            font-size: 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -580,6 +595,14 @@
                             <input type="checkbox" id="vis-uses" checked>
                             <span>Uses</span>
                         </label>
+                        <label id="vis-weighted-label" class="checkbox-label" title="Scale edge thickness by number of cross-module calls. Hover an edge to see its count.">
+                            <input type="checkbox" id="vis-weighted">
+                            <span>Weighted</span>
+                        </label>
+                        <label id="vis-cycles-label" class="checkbox-label" title="Highlight circular dependencies. Cycle edges are colored by group and marked with a diamond midpoint. A double diamond means both directions (A→B and B→A) overlap. Hover an edge for details.">
+                            <input type="checkbox" id="vis-cycles">
+                            <span>Cycles</span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -608,6 +631,7 @@
     <div id="main-content">
         <div id="cy"></div>
     </div>
+    <div id="edge-tooltip"></div>
 
     <script>
         // All data injected as a single JSON blob
@@ -1438,6 +1462,30 @@
                 if (highlightSelections.length > 0) applyHighlights();
             });
 
+            // Edge hover tooltip (shows weight and/or cycle status)
+            const edgeTooltip = document.getElementById('edge-tooltip');
+            cy.on('mouseover', 'edge', function(evt) {
+                const edge = evt.target;
+                const showWeighted = document.getElementById('vis-weighted').checked;
+                const w = edge.data('weight');
+                const inCycle = edge.hasClass('in-cycle');
+                const parts = [];
+                if (showWeighted && w > 1) parts.push(w + ' cross-module calls');
+                if (inCycle) parts.push('cyclic dependency');
+                if (parts.length === 0) return;
+                edgeTooltip.textContent = parts.join(' \u00b7 ');
+                edgeTooltip.style.display = 'block';
+                const pos = evt.renderedPosition || evt.cyRenderedPosition;
+                if (pos) {
+                    const cyRect = cy.container().getBoundingClientRect();
+                    edgeTooltip.style.left = (cyRect.left + pos.x + 12) + 'px';
+                    edgeTooltip.style.top = (cyRect.top + pos.y - 10) + 'px';
+                }
+            });
+            cy.on('mouseout', 'edge', function() {
+                edgeTooltip.style.display = 'none';
+            });
+
             cy.on('tap', 'node', function(evt) {
                 const node = evt.target;
                 const nodeId = node.id();
@@ -1640,6 +1688,64 @@
             return current;
         }
 
+        function computeModuleEdgeWeight(srcModuleId, tgtModuleId) {
+            let weight = 0;
+
+            // Java: count class_deps entries (populated when javap is available)
+            const srcClassDeps = hierarchy[srcModuleId] && hierarchy[srcModuleId].class_deps;
+            if (srcClassDeps) {
+                Object.values(srcClassDeps).forEach(targets => {
+                    targets.forEach(target => {
+                        if (target.startsWith(tgtModuleId + ':') || target.startsWith(tgtModuleId + '.')) {
+                            weight++;
+                        }
+                    });
+                });
+            }
+
+            // Cross-reference function/method calls against target module's symbols
+            if (weight === 0 && functionData[srcModuleId] && functionData[tgtModuleId]) {
+                // Build expanded target symbol set: top-level names + nested method names
+                const targetSymbols = new Set();
+                Object.entries(functionData[tgtModuleId]).forEach(([name, info]) => {
+                    targetSymbols.add(name);
+                    if (info.methods) {
+                        Object.keys(info.methods).forEach(mname => {
+                            targetSymbols.add(mname.replace(/\(.*\)$/, ''));
+                        });
+                    }
+                });
+
+                // Count calls from source module that resolve to target symbols
+                function countCalls(calls) {
+                    if (!calls) return;
+                    calls.forEach(call => {
+                        const bare = call.replace(/\(.*\)$/, '');
+                        if (targetSymbols.has(bare)) { weight++; return; }
+                        const dot = bare.lastIndexOf('.');
+                        if (dot !== -1 && targetSymbols.has(bare.substring(dot + 1))) {
+                            weight++;
+                        }
+                    });
+                }
+
+                Object.values(functionData[srcModuleId]).forEach(info => {
+                    countCalls(info.calls);
+                    if (info.methods) {
+                        Object.values(info.methods).forEach(minfo => countCalls(minfo.calls));
+                    }
+                });
+            }
+
+            return weight || 1;
+        }
+
+        function computeEdgeWidth(weight, isInherits) {
+            if (isInherits) return 3;
+            if (!weight || weight <= 0) return 2;
+            return Math.min(2 + Math.log2(weight) * 1.5, 10);
+        }
+
         function buildGraphData(nodeId) {
             const elements = [];
 
@@ -1803,7 +1909,7 @@
                             if (childSet.has(targetId) && childId !== targetId) {
                                 const edgeId = childId + '->' + targetId;
                                 if (!elements.find(el => el.data.id === edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import' } });
+                                    elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import', weight: computeModuleEdgeWeight(childId, targetId) } });
                                 }
                             }
                         });
@@ -2173,6 +2279,174 @@
             return true;
         }
 
+        function getCycleColors(count) {
+            // Generate cycle colors maximally distant from current theme hues
+            const colors = themes[currentTheme];
+            const themeHexColors = [
+                colors.nodeRoot, colors.nodeClickable, colors.nodeRegular,
+                colors.nodeClass, colors.nodeFunction, colors.nodeMethod,
+                colors.nodeExternalDirect, colors.nodeExternalIndirect,
+                colors.nodeHover, colors.edgeLine, colors.edgeArrow,
+            ];
+
+            // Extract hues (0-360) from theme colors
+            function hexToHue(hex) {
+                hex = hex.replace('#', '');
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                const r = parseInt(hex.substr(0, 2), 16) / 255;
+                const g = parseInt(hex.substr(2, 2), 16) / 255;
+                const b = parseInt(hex.substr(4, 2), 16) / 255;
+                if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+                const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                if (max - min < 0.05) return null; // achromatic
+                let h;
+                if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+                else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+                else h = 60 * ((r - g) / (max - min) + 4);
+                return ((h % 360) + 360) % 360;
+            }
+
+            const themeHues = themeHexColors.map(hexToHue).filter(h => h !== null);
+
+            // Find N hues maximally distant from theme hues and each other
+            // Score a candidate hue by its minimum angular distance to all occupied hues
+            function angularDist(a, b) {
+                const d = Math.abs(a - b) % 360;
+                return Math.min(d, 360 - d);
+            }
+
+            function minDist(candidate, occupied) {
+                let min = 360;
+                for (const h of occupied) {
+                    min = Math.min(min, angularDist(candidate, h));
+                }
+                return min;
+            }
+
+            const chosen = [];
+            const occupied = [...themeHues];
+            for (let i = 0; i < count; i++) {
+                let bestHue = 0, bestScore = -1;
+                for (let h = 0; h < 360; h += 3) {
+                    const score = minDist(h, occupied);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestHue = h;
+                    }
+                }
+                occupied.push(bestHue);
+                // Convert hue to hex at high saturation + medium-high lightness
+                const s = 0.85, l = 0.55;
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((bestHue / 60) % 2 - 1));
+                const m = l - c / 2;
+                let r, g, b;
+                if (bestHue < 60)       { r = c; g = x; b = 0; }
+                else if (bestHue < 120) { r = x; g = c; b = 0; }
+                else if (bestHue < 180) { r = 0; g = c; b = x; }
+                else if (bestHue < 240) { r = 0; g = x; b = c; }
+                else if (bestHue < 300) { r = x; g = 0; b = c; }
+                else                    { r = c; g = 0; b = x; }
+                const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+                chosen.push('#' + toHex(r) + toHex(g) + toHex(b));
+            }
+            return chosen;
+        }
+
+        function detectCycles() {
+            // Tarjan's SCC algorithm on visible edges only
+            if (!cy) return { cycleSCCs: [] };
+
+            // Build adjacency list from visible edges
+            const adj = {};
+            const visibleEdges = cy.edges().filter(e => e.style('display') !== 'none');
+            const visibleNodeIds = new Set();
+
+            visibleEdges.forEach(edge => {
+                const src = edge.data('source');
+                const tgt = edge.data('target');
+                if (!adj[src]) adj[src] = [];
+                adj[src].push({ target: tgt, edgeId: edge.id() });
+                visibleNodeIds.add(src);
+                visibleNodeIds.add(tgt);
+            });
+
+            // Tarjan's algorithm
+            let index = 0;
+            const stack = [];
+            const onStack = new Set();
+            const indices = {};
+            const lowlinks = {};
+            const sccs = [];
+
+            function strongConnect(v) {
+                indices[v] = index;
+                lowlinks[v] = index;
+                index++;
+                stack.push(v);
+                onStack.add(v);
+
+                (adj[v] || []).forEach(({ target: w }) => {
+                    if (indices[w] === undefined) {
+                        strongConnect(w);
+                        lowlinks[v] = Math.min(lowlinks[v], lowlinks[w]);
+                    } else if (onStack.has(w)) {
+                        lowlinks[v] = Math.min(lowlinks[v], indices[w]);
+                    }
+                });
+
+                if (lowlinks[v] === indices[v]) {
+                    const scc = [];
+                    let w;
+                    do {
+                        w = stack.pop();
+                        onStack.delete(w);
+                        scc.push(w);
+                    } while (w !== v);
+                    sccs.push(scc);
+                }
+            }
+
+            visibleNodeIds.forEach(nodeId => {
+                if (indices[nodeId] === undefined) {
+                    strongConnect(nodeId);
+                }
+            });
+
+            // Find cycles: SCCs with >1 node, or 1 node with a self-loop
+            const selfLoopNodes = new Set();
+            visibleEdges.forEach(edge => {
+                if (edge.data('source') === edge.data('target')) {
+                    selfLoopNodes.add(edge.data('source'));
+                }
+            });
+
+            // Collect per-SCC cycle data
+            const cycleSCCs = [];
+            sccs.forEach(scc => {
+                const isCycle = scc.length > 1 || (scc.length === 1 && selfLoopNodes.has(scc[0]));
+                if (isCycle) {
+                    const nodeIds = new Set(scc);
+                    const edgeIds = new Set();
+
+                    // Mark edges between nodes in the same SCC
+                    visibleEdges.forEach(edge => {
+                        if (nodeIds.has(edge.data('source')) && nodeIds.has(edge.data('target'))) {
+                            edgeIds.add(edge.id());
+                        }
+                    });
+
+                    cycleSCCs.push({ nodeIds, edgeIds });
+                }
+            });
+
+            // Sort largest-first so biggest tangles get the most distinctive colors
+            cycleSCCs.sort((a, b) => b.nodeIds.size - a.nodeIds.size);
+            cycleSCCs.forEach((scc, i) => { scc.colorIndex = i; });
+
+            return { cycleSCCs };
+        }
+
         function applyVisibilityFilter() {
             if (!cy) return;
 
@@ -2212,6 +2486,82 @@
                     edge.style('display', 'none');
                 }
             });
+
+            // Apply weighted edge widths
+            const showWeighted = document.getElementById('vis-weighted').checked;
+            const colors = themes[currentTheme];
+
+            cy.edges().forEach(edge => {
+                if (edge.style('display') === 'none') return;
+                const isInherits = edge.data('type') === 'inherits';
+                if (showWeighted) {
+                    edge.style('width', computeEdgeWidth(edge.data('weight'), isInherits));
+                } else {
+                    edge.style('width', isInherits ? 3 : 2);
+                }
+                // Reset edge colors to theme defaults (in case cycle highlight was previously on)
+                if (isInherits) {
+                    edge.style('line-color', colors.nodeRoot);
+                    edge.style('target-arrow-color', colors.nodeRoot);
+                } else {
+                    edge.style('line-color', colors.edgeLine);
+                    edge.style('target-arrow-color', colors.edgeArrow);
+                }
+                edge.style('z-index', isInherits ? 10 : 0);
+            });
+
+            // Apply cycle highlighting
+            const showCycles = document.getElementById('vis-cycles').checked;
+
+            // Remove previous cycle classes
+            cy.nodes('.in-cycle').removeClass('in-cycle');
+            cy.edges('.in-cycle').forEach(edge => {
+                edge.removeClass('in-cycle');
+                edge.style({
+                    'mid-source-arrow-shape': 'none',
+                    'mid-source-arrow-color': '',
+                });
+            });
+
+            if (showCycles) {
+                const { cycleSCCs } = detectCycles();
+                const cycleColors = getCycleColors(cycleSCCs.length || 1);
+
+                cycleSCCs.forEach(({ nodeIds, edgeIds, colorIndex }) => {
+                    const color = cycleColors[colorIndex % cycleColors.length];
+
+                    cy.edges().forEach(edge => {
+                        if (edge.style('display') === 'none') return;
+                        if (edgeIds.has(edge.id())) {
+                            const currentWidth = parseFloat(edge.style('width'));
+                            edge.addClass('in-cycle');
+                            edge.style({
+                                'line-color': color,
+                                'target-arrow-color': color,
+                                'mid-source-arrow-shape': 'diamond',
+                                'mid-source-arrow-color': color,
+                                'width': Math.max(currentWidth + 2, 4),
+                                'z-index': 20,
+                            });
+                        }
+                    });
+
+                    cy.nodes().forEach(node => {
+                        if (nodeIds.has(node.id())) {
+                            node.addClass('in-cycle');
+                            node.style('border-color', color);
+                            node.style('border-width', 4);
+                        }
+                    });
+                });
+            } else {
+                // Restore node styling from theme
+                cy.nodes().forEach(node => {
+                    if (!node.hasClass('user-hidden') && node.style('display') !== 'none') {
+                        applyColorsToNode(node, colors);
+                    }
+                });
+            }
         }
 
         function updateUI() {
@@ -2475,7 +2825,8 @@
         const visibilityCheckboxes = [
             'vis-direct', 'vis-transitive',
             'vis-public', 'vis-protected', 'vis-package', 'vis-private',
-            'vis-inherits', 'vis-uses'
+            'vis-inherits', 'vis-uses',
+            'vis-weighted', 'vis-cycles'
         ];
         visibilityCheckboxes.forEach(id => {
             const checkbox = document.getElementById(id);

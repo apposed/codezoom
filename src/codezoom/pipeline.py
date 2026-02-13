@@ -183,10 +183,10 @@ def run(
 
     graph = ProjectGraph(
         project_name=project_name,
-        root_node_id=root_node_id,
+        root_node_ids=[root_node_id],
     )
 
-    logger.debug("Project: %s, root_node_id: %s", project_name, root_node_id)
+    logger.debug("Project: %s, root_node_ids: %s", project_name, graph.root_node_ids)
 
     extractors = detect_extractors(project_dir, project_name)
     if not extractors:

@@ -17,7 +17,7 @@ class AstSymbolsExtractor:
         return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
-        src_dir = _find_source_dir(project_dir, graph.root_node_id)
+        src_dir = _find_source_dir(project_dir, graph.root_node_ids[0])
         if src_dir is None:
             return
 
@@ -55,7 +55,7 @@ def _find_source_dir(project_dir: Path, root_node_id: str) -> Path | None:
 def _ensure_parents_exist(graph: ProjectGraph, module_name: str) -> None:
     """Ensure all parent packages exist and children relationships are set up."""
     parts = module_name.split(".")
-    root_id = graph.root_node_id
+    root_id = graph.root_node_ids[0]
 
     # Build intermediate package nodes
     for i in range(1, len(parts)):

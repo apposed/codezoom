@@ -33,10 +33,10 @@ class JavaAstSymbolsExtractor:
             )
             return
 
-        from codezoom.extractors.java import _find_classes_dir
+        from codezoom.extractors.java import _find_classes_dirs
 
-        classes_dir = _find_classes_dir(project_dir)
-        if classes_dir is None:
+        classes_dirs = _find_classes_dirs(project_dir)
+        if not classes_dirs:
             logger.warning(
                 "Compiled classes not found — run `mvn compile` or "
                 "`gradle build` first. Skipping Java symbol extraction."
@@ -44,7 +44,7 @@ class JavaAstSymbolsExtractor:
             return
 
         # Extract class and method declarations from bytecode
-        symbols_by_package = _extract_symbols_from_bytecode(javap_path, classes_dir)
+        symbols_by_package = _extract_symbols_from_bytecode(javap_path, classes_dirs)
 
         # Merge into graph hierarchy
         for package_name, symbols in symbols_by_package.items():
@@ -64,7 +64,7 @@ class JavaAstSymbolsExtractor:
         )
 
         # Extract method calls from bytecode
-        method_calls = _extract_method_calls_from_bytecode(javap_path, classes_dir)
+        method_calls = _extract_method_calls_from_bytecode(javap_path, classes_dirs)
         _merge_method_calls(graph, method_calls)
 
 
@@ -92,28 +92,32 @@ def _visibility_from_modifiers(modifiers: str) -> str:
 
 def _resolve_class_identity(
     classfile: Path,
-    classes_dir: Path,
+    classes_dirs: list[Path],
     fqcn_with_dollar: str,
 ) -> tuple[str, str]:
     """Determine (package, class_name) from a classfile path and FQCN.
 
     Returns (package, class_name).
     """
-    try:
-        rel_path = classfile.relative_to(classes_dir)
-        package_path = rel_path.parent
-        package = str(package_path).replace("/", ".").replace("\\", ".")
-        if package == ".":
-            package = ""
-        class_name = classfile.stem.replace("$", ".")
-    except ValueError:
-        # Fallback if relative path fails
-        if "." in fqcn_with_dollar:
-            package = fqcn_with_dollar.rsplit(".", 1)[0]
-            class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace("$", ".")
-        else:
-            package = ""
-            class_name = fqcn_with_dollar.replace("$", ".")
+    for classes_dir in classes_dirs:
+        try:
+            rel_path = classfile.relative_to(classes_dir)
+            package_path = rel_path.parent
+            package = str(package_path).replace("/", ".").replace("\\", ".")
+            if package == ".":
+                package = ""
+            class_name = classfile.stem.replace("$", ".")
+            return package, class_name
+        except ValueError:
+            continue
+
+    # Fallback if relative path fails for all dirs
+    if "." in fqcn_with_dollar:
+        package = fqcn_with_dollar.rsplit(".", 1)[0]
+        class_name = fqcn_with_dollar.rsplit(".", 1)[1].replace("$", ".")
+    else:
+        package = ""
+        class_name = fqcn_with_dollar.replace("$", ".")
     return package, class_name
 
 
@@ -168,13 +172,15 @@ _LINE_NUMBER_RE = re.compile(r"^\s+line\s+(\d+):\s+\d+$")
 
 
 def _extract_symbols_from_bytecode(
-    javap_path: str, classes_dir: Path
+    javap_path: str, classes_dirs: list[Path]
 ) -> dict[str, dict[str, SymbolData]]:
     """Extract class and method declarations from bytecode using javap -v -l.
 
     Returns: {package: {class_name: SymbolData}}
     """
-    class_files = sorted(classes_dir.rglob("*.class"))
+    class_files: list[Path] = []
+    for classes_dir in classes_dirs:
+        class_files.extend(sorted(classes_dir.rglob("*.class")))
     if not class_files:
         return {}
 
@@ -223,7 +229,7 @@ def _extract_symbols_from_bytecode(
             # Derive package/class from the file path immediately — JDK 8's
             # javap doesn't emit ``this_class:``, so we can't wait for it.
             current_package, current_class_name = _resolve_class_identity(
-                current_classfile, classes_dir, ""
+                current_classfile, classes_dirs, ""
             )
             current_class_visibility = "package"
             current_class_line = None
@@ -240,7 +246,7 @@ def _extract_symbols_from_bytecode(
             fqcn_with_dollar = tcm.group(1).replace("/", ".")
             if current_classfile:
                 current_package, current_class_name = _resolve_class_identity(
-                    current_classfile, classes_dir, fqcn_with_dollar
+                    current_classfile, classes_dirs, fqcn_with_dollar
                 )
 
             if current_class_flags_pending:
@@ -405,13 +411,15 @@ def _jvm_sig_to_java(jvm_sig: str) -> str:
 
 
 def _extract_method_calls_from_bytecode(
-    javap_path: str, classes_dir: Path
+    javap_path: str, classes_dirs: list[Path]
 ) -> dict[str, dict[str, dict[str, list[str]]]]:
     """Extract method calls from compiled bytecode using javap -c.
 
     Returns: {package: {class: {method_sig: [called_method_sigs]}}}
     """
-    class_files = sorted(classes_dir.rglob("*.class"))
+    class_files: list[Path] = []
+    for classes_dir in classes_dirs:
+        class_files.extend(sorted(classes_dir.rglob("*.class")))
     if not class_files:
         return {}
 

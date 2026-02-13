@@ -618,7 +618,10 @@
         const pythonDeps = data.external_deps;
         const pythonDepsDirect = data.external_deps_direct;
         const pythonDepsGraph = data.external_deps_graph;
-        const ROOT = data.root_node_id;
+        const moduleDirectDeps = data.module_direct_deps || {};
+        const ROOT_IDS = data.root_node_ids;
+        const MULTI_ROOT = ROOT_IDS.length > 1;
+        const TOP_LEVEL = '__codezoom_top__';
 
         // Set page title
         document.getElementById('titleText').textContent = 'codezoom | ' + data.project_name;
@@ -1044,8 +1047,8 @@
         let currentTheme = localStorage.getItem('codezoom_theme') || 'light';
 
         // Navigation state
-        let currentNode = ROOT;
-        const history = [ROOT];
+        let currentNode = MULTI_ROOT ? TOP_LEVEL : ROOT_IDS[0];
+        const history = [currentNode];
 
         // Hidden nodes tracking
         const userHiddenNodes = new Set();
@@ -1656,57 +1659,108 @@
                 }
             }
 
-            // Top-level: show external dependencies
-            if (nodeId === ROOT && history.length === 1 && pythonDeps.length > 0) {
+            // Top-level: show root nodes and external dependencies
+            if (nodeId === TOP_LEVEL || (nodeId === ROOT_IDS[0] && history.length === 1 && !MULTI_ROOT)) {
                 const seenEdges = new Set();
+                const isTopDeps = (nodeId === ROOT_IDS[0] && !MULTI_ROOT && pythonDeps.length > 0);
+                const isMultiTop = (nodeId === TOP_LEVEL && MULTI_ROOT);
 
-                pythonDeps.forEach(dep => {
-                    const isDirect = pythonDepsDirect.includes(dep);
-                    elements.push({
-                        data: {
-                            id: 'ext-dep-' + dep,
-                            label: dep.replace(':', '\n'),
-                            nodeType: isDirect ? 'external-direct' : 'external-indirect',
-                            borderWidth: isDirect ? 2 : 1,
-                            borderColor: isDirect ? '#2c3e50' : '#7f8c8d',
+                if (isTopDeps || isMultiTop) {
+                    // External dependency nodes
+                    pythonDeps.forEach(dep => {
+                        const isDirect = pythonDepsDirect.includes(dep);
+                        elements.push({
+                            data: {
+                                id: 'ext-dep-' + dep,
+                                label: dep.replace(':', '\n'),
+                                nodeType: isDirect ? 'external-direct' : 'external-indirect',
+                                borderWidth: isDirect ? 2 : 1,
+                                borderColor: isDirect ? '#2c3e50' : '#7f8c8d',
+                            }
+                        });
+                    });
+
+                    // Edges between external deps
+                    pythonDeps.forEach(dep => {
+                        if (pythonDepsGraph[dep]) {
+                            pythonDepsGraph[dep].forEach(depDep => {
+                                if (pythonDeps.includes(depDep)) {
+                                    const edgeId = 'ext-dep-' + dep + '->ext-dep-' + depDep;
+                                    if (!seenEdges.has(edgeId)) {
+                                        elements.push({ data: { id: edgeId, source: 'ext-dep-' + dep, target: 'ext-dep-' + depDep, type: 'dependency' } });
+                                        seenEdges.add(edgeId);
+                                    }
+                                }
+                            });
                         }
                     });
-                });
 
-                pythonDepsDirect.forEach(dep => {
-                    const edgeId = ROOT + '->ext-dep-' + dep;
-                    if (!seenEdges.has(edgeId)) {
-                        elements.push({ data: { id: edgeId, source: ROOT, target: 'ext-dep-' + dep, type: 'dependency' } });
-                        seenEdges.add(edgeId);
-                    }
-                });
-
-                pythonDeps.forEach(dep => {
-                    if (pythonDepsGraph[dep]) {
-                        pythonDepsGraph[dep].forEach(depDep => {
-                            if (pythonDeps.includes(depDep)) {
-                                const edgeId = 'ext-dep-' + dep + '->ext-dep-' + depDep;
-                                if (!seenEdges.has(edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: 'ext-dep-' + dep, target: 'ext-dep-' + depDep, type: 'dependency' } });
-                                    seenEdges.add(edgeId);
+                    if (isMultiTop) {
+                        // Multi-root: each root is a top-level node
+                        ROOT_IDS.forEach(rootId => {
+                            const rootNode = hierarchy[rootId];
+                            const hasChildren = rootNode && rootNode.children && rootNode.children.length > 0;
+                            const rootHasFunctions = functionData[rootId];
+                            const isClickable = hasChildren || rootHasFunctions;
+                            elements.push({
+                                data: {
+                                    id: rootId,
+                                    label: rootId,
+                                    nodeType: 'root',
+                                    borderWidth: 3,
+                                    borderColor: '#c0392b',
+                                    isClickable: isClickable,
                                 }
+                            });
+
+                            // Inter-module edges
+                            if (rootNode) {
+                                (rootNode.imports_to || []).forEach(targetId => {
+                                    if (ROOT_IDS.includes(targetId)) {
+                                        const edgeId = rootId + '->' + targetId;
+                                        if (!seenEdges.has(edgeId)) {
+                                            elements.push({ data: { id: edgeId, source: rootId, target: targetId } });
+                                            seenEdges.add(edgeId);
+                                        }
+                                    }
+                                });
+                            }
+
+                            // Module → external dependency edges
+                            if (moduleDirectDeps[rootId]) {
+                                moduleDirectDeps[rootId].forEach(dep => {
+                                    const edgeId = rootId + '->ext-dep-' + dep;
+                                    if (!seenEdges.has(edgeId)) {
+                                        elements.push({ data: { id: edgeId, source: rootId, target: 'ext-dep-' + dep, type: 'dependency' } });
+                                        seenEdges.add(edgeId);
+                                    }
+                                });
+                            }
+                        });
+                    } else {
+                        // Single-root: one root node with edges to direct deps
+                        const rootId = ROOT_IDS[0];
+                        elements.push({
+                            data: {
+                                id: rootId,
+                                label: data.project_name,
+                                nodeType: 'root',
+                                borderWidth: 3,
+                                borderColor: '#c0392b',
+                            }
+                        });
+
+                        pythonDepsDirect.forEach(dep => {
+                            const edgeId = rootId + '->ext-dep-' + dep;
+                            if (!seenEdges.has(edgeId)) {
+                                elements.push({ data: { id: edgeId, source: rootId, target: 'ext-dep-' + dep, type: 'dependency' } });
+                                seenEdges.add(edgeId);
                             }
                         });
                     }
-                });
 
-                // Root node (drillable)
-                elements.push({
-                    data: {
-                        id: ROOT,
-                        label: data.project_name,
-                        nodeType: 'root',
-                        borderWidth: 3,
-                        borderColor: '#c0392b',
-                    }
-                });
-
-                return elements;
+                    return elements;
+                }
             }
 
             // Regular hierarchy node
@@ -1940,9 +1994,9 @@
         }
 
         function reset() {
-            currentNode = ROOT;
+            currentNode = MULTI_ROOT ? TOP_LEVEL : ROOT_IDS[0];
             history.length = 1;
-            history[0] = ROOT;
+            history[0] = currentNode;
             updateUI();
         }
 
@@ -1981,7 +2035,7 @@
 
         function getZoomContext() {
             // Determine what level we're viewing
-            if (currentNode === ROOT && history.length === 1 && pythonDeps.length > 0) {
+            if (currentNode === TOP_LEVEL || (currentNode === ROOT_IDS[0] && history.length === 1 && !MULTI_ROOT && pythonDeps.length > 0)) {
                 return 'dependencies';
             } else if (currentNode.includes(':')) {
                 // At class or method level

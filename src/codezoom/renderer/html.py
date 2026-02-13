@@ -52,12 +52,13 @@ def _graph_to_json(graph: ProjectGraph) -> str:
 
     data = {
         "project_name": graph.project_name,
-        "root_node_id": graph.root_node_id,
+        "root_node_ids": graph.root_node_ids,
         "hierarchy": hierarchy,
         "functionData": function_data,
         "external_deps": external_deps_all,
         "external_deps_direct": external_deps_direct,
         "external_deps_graph": graph.external_deps_graph,
+        "module_direct_deps": graph.module_direct_deps,
     }
     return json.dumps(data)
 

@@ -45,7 +45,8 @@ class ProjectGraph:
     """Complete project structure produced by extractors."""
 
     project_name: str
-    root_node_id: str
+    root_node_ids: list[str] = field(default_factory=list)
     hierarchy: dict[str, NodeData] = field(default_factory=dict)
     external_deps: list[ExternalDep] = field(default_factory=list)
     external_deps_graph: dict[str, list[str]] = field(default_factory=dict)
+    module_direct_deps: dict[str, list[str]] = field(default_factory=dict)

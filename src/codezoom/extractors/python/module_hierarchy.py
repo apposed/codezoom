@@ -29,14 +29,14 @@ class ModuleHierarchyExtractor:
         return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
-        src_dir = _find_source_dir(project_dir, graph.root_node_id)
+        src_dir = _find_source_dir(project_dir, graph.root_node_ids[0])
         if src_dir is None:
             return
 
-        deps = _run_pydeps(project_dir, src_dir, graph.root_node_id, self._exclude)
+        deps = _run_pydeps(project_dir, src_dir, graph.root_node_ids[0], self._exclude)
         if deps is None:
             # Fallback: build hierarchy from file tree only (no import edges)
-            deps = _build_deps_from_files(src_dir, graph.root_node_id)
+            deps = _build_deps_from_files(src_dir, graph.root_node_ids[0])
 
         _build_hierarchical_data(deps, graph)
 
@@ -112,7 +112,7 @@ def _build_deps_from_files(src_dir: Path, root_node_id: str) -> dict:
 
 def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
     """Build the hierarchy inside *graph* from pydeps output."""
-    root_id = graph.root_node_id
+    root_id = graph.root_node_ids[0]
 
     hierarchy: dict[str, dict[str, set]] = defaultdict(
         lambda: {"children": set(), "imports_from": set(), "imports_to": set()}

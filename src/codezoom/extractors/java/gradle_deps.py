@@ -142,7 +142,9 @@ class GradleDepsExtractor:
                 all_deps, dep_graph = _parse_dependency_tree(result.stdout)
 
                 if not all_deps:
-                    logger.debug("No dependencies found in %s, trying next config", config)
+                    logger.debug(
+                        "No dependencies found in %s, trying next config", config
+                    )
                     continue
 
                 # Determine which deps are direct (appear at the top level)

@@ -376,6 +376,32 @@
             cursor: not-allowed;
         }
 
+        /* Right-click context menu */
+        #context-menu {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            min-width: 140px;
+            overflow: hidden;
+        }
+
+        .ctx-item {
+            padding: 8px 14px;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .ctx-item:hover {
+            background: var(--button-bg);
+            color: white;
+        }
+
         #breadcrumb {
             font-size: 12px;
             color: var(--text-secondary);
@@ -465,7 +491,7 @@
             <!-- Navigation -->
             <div class="control-row">
                 <div class="section-label">Navigation</div>
-                <p>Click a node to zoom in.</p>
+                <p>Double-click a node to zoom in.</p>
                 <p>Click breadcrumb to go back.</p>
                 <div id="breadcrumb" title="Breadcrumb trail"></div>
                 <div class="control-row-horizontal">
@@ -584,29 +610,30 @@
                 </div>
             </div>
 
-            <!-- Visibility -->
+            <!-- Display -->
             <div class="control-row">
-                <div class="section-label">Visibility</div>
-                <p>Right-click to hide a node.</p>
+                <div class="section-label">Display</div>
                 <label class="checkbox-label">
                     <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
                     <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
                 </label>
-                <button onclick="unhideAll()" class="small" title="Unhide all nodes">&#x1f441;&#xfe0f; Unhide All</button> <!-- Eye -->
-            </div>
-
-            <!-- Highlight -->
-            <div class="control-row">
-                <div class="section-label">Highlight</div>
-                <p>Shift+click or middle-click a node to highlight its connections.</p>
-                <p>Click additional nodes for multi-color comparison.</p>
-                <button onclick="clearAllHighlights()" class="small" title="Clear all highlights">&#x2728; Clear Highlights</button> <!-- Sparkles -->
+                <div class="layout-toolbar">
+                    <button id="hideShowBtn" onclick="toggleHideShowSelected()" title="Hide selected nodes" disabled>&#x1f441;&#xfe0f;</button> <!-- Eye -->
+                    <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
+                </div>
             </div>
         </div>
     </div>
 
     <div id="main-content">
         <div id="cy"></div>
+    </div>
+
+    <!-- Right-click context menu -->
+    <div id="context-menu">
+        <div class="ctx-item" id="ctx-drill-in" onclick="ctxDrillIn()">Drill In</div>
+        <div class="ctx-item" id="ctx-hide-show" onclick="ctxHideShow()">Hide</div>
+        <div class="ctx-item" id="ctx-highlight" onclick="ctxHighlight()">Highlight</div>
     </div>
 
     <script>
@@ -1177,6 +1204,15 @@
             // Apply border style based on visibility
             const borderStyle = getBorderStyleForVisibility(d.visibility);
             node.style('border-style', borderStyle);
+
+            // Selection overlay using the theme hover color
+            if (node.selected()) {
+                node.style('overlay-color', colors.nodeHover);
+                node.style('overlay-opacity', 0.4);
+                node.style('overlay-padding', '6px');
+            } else {
+                node.style('overlay-opacity', 0);
+            }
         }
 
         function applyNodeColors() {
@@ -1209,6 +1245,142 @@
         function clearAllHighlights() {
             highlightSelections = [];
             applyHighlights();
+        }
+
+        function isDrillableNode(nodeId) {
+            const hasChildren = hierarchy[nodeId] && hierarchy[nodeId].children && hierarchy[nodeId].children.length > 0;
+            const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
+            if (hasChildren || hasFunctions) return true;
+            if (nodeId.includes(':')) {
+                const lastColonIdx = nodeId.lastIndexOf(':');
+                const moduleId = nodeId.substring(0, lastColonIdx);
+                const symbolPath = nodeId.substring(lastColonIdx + 1);
+                const symbolInfo = findSymbol(moduleId, symbolPath);
+                return !!(symbolInfo && symbolInfo.type === 'class' && symbolInfo.methods && Object.keys(symbolInfo.methods).length > 0);
+            }
+            return false;
+        }
+
+        function updateDisplayButtons() {
+            const hideShowBtn = document.getElementById('hideShowBtn');
+            const highlightBtn = document.getElementById('highlightBtn');
+            if (!hideShowBtn || !highlightBtn) return;
+            if (!cy || cy.nodes(':selected').length === 0) {
+                hideShowBtn.disabled = true;
+                hideShowBtn.title = 'Hide selected nodes';
+                highlightBtn.disabled = true;
+                highlightBtn.title = 'Highlight selected nodes';
+                return;
+            }
+            const selected = cy.nodes(':selected');
+            hideShowBtn.disabled = false;
+            let allHidden = true;
+            selected.forEach(n => { if (!n.hasClass('user-hidden')) allHidden = false; });
+            hideShowBtn.title = allHidden ? 'Show selected nodes' : 'Hide selected nodes';
+
+            highlightBtn.disabled = false;
+            let allHighlighted = true;
+            selected.forEach(n => { if (!highlightSelections.some(s => s.nodeId === n.id())) allHighlighted = false; });
+            highlightBtn.title = allHighlighted ? 'Unhighlight selected nodes' : 'Highlight selected nodes';
+        }
+
+        function toggleHideShowSelected() {
+            if (!cy) return;
+            const selected = cy.nodes(':selected');
+            if (selected.length === 0) return;
+            let allHidden = true;
+            selected.forEach(n => { if (!n.hasClass('user-hidden')) allHidden = false; });
+            if (allHidden) {
+                selected.forEach(node => {
+                    userHiddenNodes.delete(node.id());
+                    node.removeClass('user-hidden');
+                    node.style('display', 'element');
+                    node.style('opacity', 1);
+                });
+            } else {
+                selected.forEach(node => {
+                    userHiddenNodes.add(node.id());
+                    node.addClass('user-hidden');
+                });
+                updateHiddenDisplay();
+            }
+            updateDisplayButtons();
+        }
+
+        function toggleHighlightSelected() {
+            if (!cy) return;
+            const selected = cy.nodes(':selected');
+            if (selected.length === 0) return;
+            const selectedIds = [];
+            selected.forEach(n => selectedIds.push(n.id()));
+            const allHighlighted = selectedIds.every(id => highlightSelections.some(s => s.nodeId === id));
+            if (allHighlighted) {
+                const idSet = new Set(selectedIds);
+                highlightSelections = highlightSelections.filter(s => !idSet.has(s.nodeId));
+            } else {
+                selectedIds.forEach(nodeId => {
+                    if (highlightSelections.some(s => s.nodeId === nodeId)) return;
+                    const usedIndices = new Set(highlightSelections.map(s => s.colorIndex));
+                    let colorIndex = 0;
+                    while (usedIndices.has(colorIndex) && colorIndex < highlightColors.length) colorIndex++;
+                    colorIndex = colorIndex % highlightColors.length;
+                    highlightSelections.push({ nodeId, colorIndex });
+                });
+            }
+            applyHighlights();
+            updateDisplayButtons();
+        }
+
+        // Context menu
+        let contextMenuNode = null;
+
+        function showContextMenu(x, y, node) {
+            contextMenuNode = node;
+            const nodeId = node.id();
+            const drillItem = document.getElementById('ctx-drill-in');
+            drillItem.style.display = isDrillableNode(nodeId) ? 'block' : 'none';
+            const hideShowItem = document.getElementById('ctx-hide-show');
+            hideShowItem.textContent = userHiddenNodes.has(nodeId) ? 'Show' : 'Hide';
+            const highlightItem = document.getElementById('ctx-highlight');
+            highlightItem.textContent = highlightSelections.some(s => s.nodeId === nodeId) ? 'Unhighlight' : 'Highlight';
+            const menu = document.getElementById('context-menu');
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            menu.style.display = 'block';
+        }
+
+        function hideContextMenu() {
+            document.getElementById('context-menu').style.display = 'none';
+            contextMenuNode = null;
+        }
+
+        function ctxDrillIn() {
+            const nodeId = contextMenuNode ? contextMenuNode.id() : null;
+            hideContextMenu();
+            if (nodeId) drillInto(nodeId);
+        }
+
+        function ctxHideShow() {
+            if (!contextMenuNode) { hideContextMenu(); return; }
+            const node = contextMenuNode;
+            const nodeId = node.id();
+            if (userHiddenNodes.has(nodeId)) {
+                userHiddenNodes.delete(nodeId);
+                node.removeClass('user-hidden');
+                node.style('display', 'element');
+                node.style('opacity', 1);
+            } else {
+                userHiddenNodes.add(nodeId);
+                node.addClass('user-hidden');
+                updateHiddenDisplay();
+            }
+            updateDisplayButtons();
+            hideContextMenu();
+        }
+
+        function ctxHighlight() {
+            if (contextMenuNode) toggleHighlight(contextMenuNode.id());
+            hideContextMenu();
         }
 
         function applyHighlights() {
@@ -1412,6 +1584,7 @@
                     animate: true,
                     animationDuration: 500,
                 },
+                boxSelectionEnabled: true,
                 wheelSensitivity: 0.05,
                 minZoom: 0.1,
                 maxZoom: 3,
@@ -1438,62 +1611,23 @@
                 if (highlightSelections.length > 0) applyHighlights();
             });
 
-            cy.on('tap', 'node', function(evt) {
-                const node = evt.target;
-                const nodeId = node.id();
-
-                // Shift+click: toggle highlight instead of drilling in
-                if (evt.originalEvent.shiftKey) {
-                    toggleHighlight(nodeId);
-                    return;
-                }
-
-                const hasChildren = hierarchy[nodeId] && hierarchy[nodeId].children && hierarchy[nodeId].children.length > 0;
-                const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
-
-                let isClickableClass = false;
-                if (nodeId.includes(':')) {
-                    const lastColonIdx = nodeId.lastIndexOf(':');
-                    const moduleId = nodeId.substring(0, lastColonIdx);
-                    const symbolPath = nodeId.substring(lastColonIdx + 1);
-
-                    // Check if this symbol is a class with children (could be inner class)
-                    const symbolInfo = findSymbol(moduleId, symbolPath);
-                    if (symbolInfo) {
-                        isClickableClass = symbolInfo.type === 'class' && symbolInfo.methods && Object.keys(symbolInfo.methods).length > 0;
-                    }
-                }
-
-                if (hasChildren || hasFunctions || isClickableClass) {
-                    drillInto(nodeId);
-                }
+            // Double-click to drill into a node
+            cy.on('dbltap', 'node', function(evt) {
+                const nodeId = evt.target.id();
+                if (isDrillableNode(nodeId)) drillInto(nodeId);
             });
 
-            // Shift+click on background: clear all highlights
-            cy.on('tap', function(evt) {
-                if (evt.target !== cy) return;
-                if (evt.originalEvent.shiftKey) {
-                    clearAllHighlights();
-                }
+            // Update selection overlay and Display buttons when selection changes
+            cy.on('select unselect', 'node', function(evt) {
+                applyColorsToNode(evt.target, themes[currentTheme]);
+                updateDisplayButtons();
             });
 
-            // Right-click to hide/unhide nodes
+            // Right-click: show context menu
             cy.on('cxttap', 'node', function(evt) {
-                const node = evt.target;
-                const nodeId = node.id();
-
-                if (userHiddenNodes.has(nodeId)) {
-                    // Unhide
-                    userHiddenNodes.delete(nodeId);
-                    node.removeClass('user-hidden');
-                    node.style('display', 'element');
-                    node.style('opacity', 1);
-                } else {
-                    // Hide
-                    userHiddenNodes.add(nodeId);
-                    node.addClass('user-hidden');
-                    updateHiddenDisplay();
-                }
+                evt.originalEvent.preventDefault();
+                const e = evt.originalEvent;
+                showContextMenu(e.clientX, e.clientY, evt.target);
             });
 
             // Alt + drag to move node with all descendants
@@ -1550,45 +1684,13 @@
                 initialPositions = null;
             });
 
-            // Middle-click handling via native DOM events
-            // (Cytoscape.js only has built-in events for left-click and right-click)
-            const cyContainer = document.getElementById('cy');
-            cyContainer.addEventListener('mousedown', function(e) {
-                if (e.button === 1) e.preventDefault();
-            });
-            cyContainer.addEventListener('auxclick', function(e) {
-                if (e.button !== 1) return;
-                e.preventDefault();
-
-                // Get click position relative to the container
-                const rect = cyContainer.getBoundingClientRect();
-                const renderedX = e.clientX - rect.left;
-                const renderedY = e.clientY - rect.top;
-
-                // Find node under cursor using rendered bounding boxes
-                let clickedNode = null;
-                cy.nodes().forEach(function(node) {
-                    if (node.hidden()) return;
-                    const bb = node.renderedBoundingBox();
-                    if (renderedX >= bb.x1 && renderedX <= bb.x2 &&
-                        renderedY >= bb.y1 && renderedY <= bb.y2) {
-                        clickedNode = node;
-                    }
-                });
-
-                if (clickedNode) {
-                    toggleHighlight(clickedNode.id());
-                } else {
-                    clearAllHighlights();
-                }
-            });
-
             setTimeout(() => {
                 applyNodeColors();
                 applyVisibilityFilter();  // Apply filter after layout
                 if (highlightSelections.length > 0) applyHighlights();
                 cy.fit();
                 syncZoomSlider();  // Set up zoom event listener
+                updateDisplayButtons();  // Reset Display buttons for new graph
             }, 100);
         }
 
@@ -2537,6 +2639,32 @@
                 }
             });
         })();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Don't capture keypresses in form elements
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === 'Escape') {
+                if (cy) cy.elements().unselect();
+                hideContextMenu();
+            } else if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                if (cy) cy.nodes(':visible').select();
+            } else if (e.key === 'Enter') {
+                if (cy) {
+                    const selected = cy.nodes(':selected');
+                    if (selected.length === 1 && isDrillableNode(selected[0].id())) {
+                        drillInto(selected[0].id());
+                    }
+                }
+            }
+        });
+
+        // Dismiss context menu on any click outside it
+        document.addEventListener('click', function(e) {
+            const menu = document.getElementById('context-menu');
+            if (menu && !menu.contains(e.target)) hideContextMenu();
+        });
 
         // Initialize
         updateUI();

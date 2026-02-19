@@ -717,6 +717,11 @@
                 <tr><td>Esc</td><td>Deselect all nodes; close menus</td></tr>
                 <tr><td>Enter</td><td>Drill into selected node</td></tr>
                 <tr><td>Ctrl + A</td><td>Select all visible nodes</td></tr>
+                <tr><td>Del</td><td>Hide / show selected nodes</td></tr>
+                <tr><td>H</td><td>Toggle highlight on selected nodes</td></tr>
+                <tr><td>E</td><td>Expand / collapse selected nodes</td></tr>
+                <tr><td>F</td><td>Fit graph to viewport</td></tr>
+                <tr><td>Home</td><td>Reset to top-level view</td></tr>
             </table>
 
             <h3>Mouse — Nodes</h3>
@@ -2914,6 +2919,17 @@
                         drillInto(selected[0].id());
                     }
                 }
+            } else if (e.key === 'Delete') {
+                toggleHideShowSelected();
+            } else if (e.key === 'f' && !e.ctrlKey && !e.metaKey) {
+                if (cy) cy.fit();
+            } else if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+                toggleHighlightSelected();
+            } else if (e.key === 'e' && !e.ctrlKey && !e.metaKey) {
+                toggleExpandSelected();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                reset();
             }
         });
 

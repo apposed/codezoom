@@ -42,6 +42,18 @@ def detect_extractors(project_dir: Path, project_name: str) -> list[Extractor]:
         extractors.append(JavaPackageHierarchyExtractor())
         extractors.append(JavaAstSymbolsExtractor())
 
+    is_rust = (project_dir / "Cargo.toml").exists()
+    if is_rust:
+        from codezoom.extractors.rust import (
+            RustAstSymbolsExtractor,
+            RustCargoDepsExtractor,
+            RustModuleHierarchyExtractor,
+        )
+
+        extractors.append(RustCargoDepsExtractor())
+        extractors.append(RustModuleHierarchyExtractor())
+        extractors.append(RustAstSymbolsExtractor())
+
     return extractors
 
 

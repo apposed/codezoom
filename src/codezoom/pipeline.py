@@ -58,6 +58,22 @@ def _guess_project_name(project_dir: Path) -> str:
             if name:
                 return name
 
+    # Cargo.toml: workspace or package name
+    cargo_toml = project_dir / "Cargo.toml"
+    if cargo_toml.exists():
+        try:
+            import tomllib
+
+            with open(cargo_toml, "rb") as f:
+                data = tomllib.load(f)
+            # Try [package] name first (single-crate project)
+            name = data.get("package", {}).get("name")
+            if name:
+                return name
+            # Workspace: fall back to directory name
+        except (OSError, tomllib.TOMLDecodeError, KeyError):
+            pass
+
     return project_dir.name.replace("-", "_")
 
 
@@ -123,6 +139,10 @@ def _find_package_name(project_dir: Path) -> str | None:
         (project_dir / "build.gradle.kts").exists()
         or (project_dir / "build.gradle").exists()
     ) and not is_python_project(project_dir):
+        return None
+
+    # Rust projects: root_node_ids set by RustModuleHierarchyExtractor.
+    if (project_dir / "Cargo.toml").exists() and not is_python_project(project_dir):
         return None
 
     _SKIP = {

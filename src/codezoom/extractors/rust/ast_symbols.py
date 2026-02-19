@@ -8,6 +8,14 @@ from pathlib import Path
 from codezoom.extractors.rust._rustdoc import get_rustdoc_json
 from codezoom.model import NodeData, ProjectGraph, SymbolData
 
+try:
+    import tree_sitter_rust as _ts_rust
+    from tree_sitter import Language, Parser
+
+    _TS_AVAILABLE = True
+except ImportError:
+    _TS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +31,8 @@ class RustAstSymbolsExtractor:
             if doc is None:
                 continue
             _extract_crate_symbols(doc, crate_name, graph)
+
+        _extract_calls_from_source(project_dir, graph)
 
 
 def _extract_crate_symbols(doc: dict, crate_name: str, graph: ProjectGraph) -> None:
@@ -294,3 +304,155 @@ def _resolve_type_id_and_name(for_type: dict) -> tuple[int | None, str | None]:
         return type_id, name
 
     return None, None
+
+
+# ---------------------------------------------------------------------------
+# Tree-sitter call extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_calls_from_source(project_dir: Path, graph: ProjectGraph) -> None:
+    """Walk Rust source files and populate SymbolData.calls via tree-sitter."""
+    if not _TS_AVAILABLE:
+        return
+
+    from codezoom.extractors.rust.module_hierarchy import (
+        _discover_workspace_crates,
+        _source_file_to_module_path,
+    )
+
+    parser = Parser(Language(_ts_rust.language()))
+
+    crate_info = _discover_workspace_crates(project_dir)
+    call_count = 0
+    for _crate_name, _target_name, src_dir in crate_info:
+        if src_dir is None or not src_dir.is_dir():
+            continue
+        for rs_file in src_dir.rglob("*.rs"):
+            mod_path = _source_file_to_module_path(rs_file, src_dir, _crate_name)
+            if mod_path is None:
+                continue
+            node = graph.hierarchy.get(mod_path)
+            if node is None or node.symbols is None:
+                continue
+            call_count += _parse_file_calls(parser, rs_file, node.symbols)
+
+    logger.debug("Rust call extraction: %d call edges added", call_count)
+
+
+def _parse_file_calls(
+    parser: Parser, rs_file: Path, symbols: dict[str, SymbolData]
+) -> int:
+    """Parse a single .rs file and populate calls for matching symbols."""
+    try:
+        source = rs_file.read_bytes()
+    except OSError:
+        return 0
+
+    tree = parser.parse(source)
+    call_count = 0
+
+    for child in tree.root_node.children:
+        if child.type == "function_item":
+            fn_name = _node_child_text(child, "name")
+            if fn_name and fn_name in symbols:
+                body = _find_child_by_type(child, "block")
+                if body:
+                    calls = _collect_calls_from_body(body)
+                    if calls:
+                        symbols[fn_name].calls = sorted(calls)
+                        call_count += len(calls)
+
+        elif child.type == "impl_item":
+            type_name = _impl_type_name(child)
+            type_symbol = symbols.get(type_name) if type_name else None
+            if type_symbol is None:
+                continue
+            body_node = _find_child_by_type(child, "declaration_list")
+            if body_node is None:
+                continue
+            for item in body_node.children:
+                if item.type == "function_item":
+                    method_name = _node_child_text(item, "name")
+                    method_sym = (
+                        type_symbol.children.get(method_name) if method_name else None
+                    )
+                    if method_sym is not None:
+                        body = _find_child_by_type(item, "block")
+                        if body:
+                            calls = _collect_calls_from_body(body)
+                            if calls:
+                                method_sym.calls = sorted(calls)
+                                call_count += len(calls)
+
+    return call_count
+
+
+def _collect_calls_from_body(body_node) -> set[str]:
+    """Walk descendants of a function body and collect call target names."""
+    calls: set[str] = set()
+    stack = list(body_node.children)
+    while stack:
+        node = stack.pop()
+        if node.type == "call_expression":
+            func = node.child_by_field_name("function")
+            if func is not None:
+                name = _call_target_name(func)
+                if name:
+                    calls.add(name)
+        stack.extend(node.children)
+    return calls
+
+
+def _call_target_name(func_node) -> str | None:
+    """Extract the simple name from a call_expression's function node."""
+    if func_node.type == "identifier":
+        return func_node.text.decode()
+    if func_node.type == "field_expression":
+        field = func_node.child_by_field_name("field")
+        if field is not None:
+            return field.text.decode()
+    if func_node.type == "scoped_identifier":
+        name = func_node.child_by_field_name("name")
+        if name is not None:
+            return name.text.decode()
+    # Generic function: e.g. foo::<T>(...)
+    if func_node.type == "generic_function":
+        inner = func_node.child_by_field_name("function")
+        if inner is not None:
+            return _call_target_name(inner)
+    return None
+
+
+def _node_child_text(node, field_name: str) -> str | None:
+    """Get the decoded text of a named child field."""
+    child = node.child_by_field_name(field_name)
+    if child is not None:
+        return child.text.decode()
+    return None
+
+
+def _find_child_by_type(node, type_name: str):
+    """Find the first direct child with the given node type."""
+    for child in node.children:
+        if child.type == type_name:
+            return child
+    return None
+
+
+def _impl_type_name(impl_node) -> str | None:
+    """Extract the type name from an impl_item node."""
+    type_node = impl_node.child_by_field_name("type")
+    if type_node is None:
+        return None
+    if type_node.type == "type_identifier":
+        return type_node.text.decode()
+    if type_node.type == "scoped_type_identifier":
+        name = type_node.child_by_field_name("name")
+        if name is not None:
+            return name.text.decode()
+    if type_node.type == "generic_type":
+        type_id = type_node.child_by_field_name("type")
+        if type_id is not None:
+            return type_id.text.decode()
+    return None

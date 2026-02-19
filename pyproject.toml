@@ -26,6 +26,10 @@ dependencies = [
 java = [
     "jgo>=2.0.0.dev0",
 ]
+rust = [
+    "tree-sitter>=0.24",
+    "tree-sitter-rust>=0.24",
+]
 
 [dependency-groups]
 dev = [

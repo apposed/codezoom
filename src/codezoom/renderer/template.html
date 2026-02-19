@@ -402,6 +402,73 @@
             color: white;
         }
 
+        /* Help modal */
+        #help-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        #help-overlay.visible {
+            display: flex;
+        }
+        #help-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 24px var(--shadow-color);
+            padding: 20px 24px;
+            max-width: 520px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        #help-modal h2 {
+            margin: 0 0 16px;
+            font-size: 16px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #help-modal h2 button {
+            font-size: 14px;
+            padding: 2px 8px;
+            min-width: 0;
+        }
+        #help-modal h3 {
+            margin: 14px 0 6px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+        #help-modal table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #help-modal td {
+            padding: 4px 6px;
+            vertical-align: top;
+        }
+        #help-modal td:first-child {
+            white-space: nowrap;
+            font-family: monospace;
+            font-size: 12px;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            padding: 3px 7px;
+            width: 1%;
+        }
+        #help-modal tr + tr td {
+            border-top: 1px solid var(--border-color);
+        }
+
         #breadcrumb {
             font-size: 12px;
             color: var(--text-secondary);
@@ -491,12 +558,13 @@
             <!-- Navigation -->
             <div class="control-row">
                 <div class="section-label">Navigation</div>
-                <p>Double-click a node to zoom in.</p>
+                <p>Double-click node to zoom in.</p>
                 <p>Click breadcrumb to go back.</p>
                 <div id="breadcrumb" title="Breadcrumb trail"></div>
                 <div class="control-row-horizontal">
                     <button id="resetBtn" onclick="reset()" title="Reset to top">&#x1f3e0;</button> <!-- House -->
                     <button id="backBtn" onclick="goUp()" title="Go up one level">&#x2b06;&#xfe0f;</button> <!-- Up Arrow -->
+                    <button onclick="showHelp()" title="Help (? or F1)">&#x2753;</button> <!-- Question Mark -->
                 </div>
             </div>
 
@@ -636,6 +704,46 @@
         <div class="ctx-item" id="ctx-drill-in" onclick="ctxDrillIn()">Drill In</div>
         <div class="ctx-item" id="ctx-hide-show" onclick="ctxHideShow()">Hide</div>
         <div class="ctx-item" id="ctx-highlight" onclick="ctxHighlight()">Highlight</div>
+    </div>
+
+    <!-- Help modal -->
+    <div id="help-overlay" onclick="hideHelp()">
+        <div id="help-modal" onclick="event.stopPropagation()">
+            <h2>Keyboard &amp; Mouse Reference <button onclick="hideHelp()">✕</button></h2>
+
+            <h3>Keyboard</h3>
+            <table>
+                <tr><td>? / F1</td><td>Show this help</td></tr>
+                <tr><td>Esc</td><td>Deselect all nodes; close menus</td></tr>
+                <tr><td>Enter</td><td>Drill into selected node</td></tr>
+                <tr><td>Ctrl + A</td><td>Select all visible nodes</td></tr>
+            </table>
+
+            <h3>Mouse — Nodes</h3>
+            <table>
+                <tr><td>Click</td><td>Select single node</td></tr>
+                <tr><td>Drag</td><td>Move selected node(s)</td></tr>
+                <tr><td>Double-click</td><td>Drill into node (zoom in one level)</td></tr>
+                <tr><td>Right-click</td><td>Open context menu (Expand, Drill In, Hide, Highlight)</td></tr>
+                <tr><td>Ctrl + click</td><td>Add clicked node to selection</td></tr>
+                <tr><td>Shift + Drag</td><td>Select nodes inside rectangle</td></tr>
+                <tr><td>Alt + Drag</td><td>Move selected node(s) and all descendants together</td></tr>
+            </table>
+
+            <h3>Mouse — Canvas</h3>
+            <table>
+                <tr><td>Scroll wheel</td><td>Zoom in / out</td></tr>
+                <tr><td>Drag (background)</td><td>Pan the canvas</td></tr>
+                <tr><td>Click (background)</td><td>Deselect all nodes</td></tr>
+            </table>
+
+            <h3>Navigation</h3>
+            <table>
+                <tr><td>🏠</td><td>Reset to top-level view</td></tr>
+                <tr><td>⬆️</td><td>Go up one level</td></tr>
+                <tr><td>Breadcrumb</td><td>Click any crumb to jump to that level</td></tr>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -2774,13 +2882,28 @@
             });
         })();
 
+        function showHelp() {
+            document.getElementById('help-overlay').classList.add('visible');
+        }
+        function hideHelp() {
+            document.getElementById('help-overlay').classList.remove('visible');
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             // Don't capture keypresses in form elements
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-            if (e.key === 'Escape') {
-                if (cy) cy.elements().unselect();
-                hideContextMenu();
+            if (e.key === 'F1' || (e.key === '?' && !e.ctrlKey && !e.metaKey)) {
+                e.preventDefault();
+                const overlay = document.getElementById('help-overlay');
+                if (overlay.classList.contains('visible')) hideHelp(); else showHelp();
+            } else if (e.key === 'Escape') {
+                if (document.getElementById('help-overlay').classList.contains('visible')) {
+                    hideHelp();
+                } else {
+                    if (cy) cy.elements().unselect();
+                    hideContextMenu();
+                }
             } else if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault();
                 if (cy) cy.nodes(':visible').select();

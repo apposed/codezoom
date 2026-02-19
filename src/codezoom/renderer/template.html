@@ -620,6 +620,7 @@
                 <div class="layout-toolbar">
                     <button id="hideShowBtn" onclick="toggleHideShowSelected()" title="Hide selected nodes" disabled>&#x1f441;&#xfe0f;</button> <!-- Eye -->
                     <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
+                    <button id="expandBtn" onclick="toggleExpandSelected()" title="Expand selected nodes" disabled>&#x229e;</button> <!-- Squared Plus -->
                 </div>
             </div>
         </div>
@@ -631,6 +632,7 @@
 
     <!-- Right-click context menu -->
     <div id="context-menu">
+        <div class="ctx-item" id="ctx-expand" onclick="ctxExpand()">Expand</div>
         <div class="ctx-item" id="ctx-drill-in" onclick="ctxDrillIn()">Drill In</div>
         <div class="ctx-item" id="ctx-hide-show" onclick="ctxHideShow()">Hide</div>
         <div class="ctx-item" id="ctx-highlight" onclick="ctxHighlight()">Highlight</div>
@@ -649,6 +651,7 @@
         const ROOT_IDS = data.root_node_ids;
         const MULTI_ROOT = ROOT_IDS.length > 1;
         const TOP_LEVEL = '__codezoom_top__';
+        let expandedNodes = new Set(); // IDs of package nodes expanded as compound containers
 
         // Set page title
         document.getElementById('titleText').textContent = 'codezoom | ' + data.project_name;
@@ -1205,6 +1208,11 @@
             const borderStyle = getBorderStyleForVisibility(d.visibility);
             node.style('border-style', borderStyle);
 
+            if (node.isParent()) {
+                node.style('background-opacity', 0.15);
+                node.style('border-style', 'dashed');
+            }
+
             // Selection overlay using the theme hover color
             if (node.selected()) {
                 node.style('overlay-color', colors.nodeHover);
@@ -1247,6 +1255,11 @@
             applyHighlights();
         }
 
+        function isExpandableNode(nodeId) {
+            if (nodeId.includes(':') || nodeId.startsWith('ext-dep-')) return false;
+            return !!(functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0);
+        }
+
         function isDrillableNode(nodeId) {
             const hasChildren = hierarchy[nodeId] && hierarchy[nodeId].children && hierarchy[nodeId].children.length > 0;
             const hasFunctions = functionData[nodeId] && Object.keys(functionData[nodeId]).length > 0;
@@ -1264,12 +1277,14 @@
         function updateDisplayButtons() {
             const hideShowBtn = document.getElementById('hideShowBtn');
             const highlightBtn = document.getElementById('highlightBtn');
+            const expandBtn = document.getElementById('expandBtn');
             if (!hideShowBtn || !highlightBtn) return;
             if (!cy || cy.nodes(':selected').length === 0) {
                 hideShowBtn.disabled = true;
                 hideShowBtn.title = 'Hide selected nodes';
                 highlightBtn.disabled = true;
                 highlightBtn.title = 'Highlight selected nodes';
+                if (expandBtn) { expandBtn.disabled = true; expandBtn.title = 'Expand selected nodes'; }
                 return;
             }
             const selected = cy.nodes(':selected');
@@ -1282,6 +1297,18 @@
             let allHighlighted = true;
             selected.forEach(n => { if (!highlightSelections.some(s => s.nodeId === n.id())) allHighlighted = false; });
             highlightBtn.title = allHighlighted ? 'Unhighlight selected nodes' : 'Highlight selected nodes';
+
+            if (expandBtn) {
+                const expandable = selected.filter(n => isExpandableNode(n.id()));
+                if (expandable.length === 0) {
+                    expandBtn.disabled = true;
+                    expandBtn.title = 'Expand selected nodes';
+                } else {
+                    expandBtn.disabled = false;
+                    const allExpanded = expandable.every(n => expandedNodes.has(n.id()));
+                    expandBtn.title = allExpanded ? 'Collapse selected nodes' : 'Expand selected nodes';
+                }
+            }
         }
 
         function toggleHideShowSelected() {
@@ -1331,12 +1358,32 @@
             updateDisplayButtons();
         }
 
+        function toggleExpandSelected() {
+            if (!cy) return;
+            const selected = cy.nodes(':selected');
+            const expandable = selected.filter(n => isExpandableNode(n.id()));
+            if (expandable.length === 0) return;
+            const allExpanded = expandable.every(n => expandedNodes.has(n.id()));
+            expandable.forEach(n => {
+                if (allExpanded) expandedNodes.delete(n.id());
+                else expandedNodes.add(n.id());
+            });
+            updateUI();
+        }
+
         // Context menu
         let contextMenuNode = null;
 
         function showContextMenu(x, y, node) {
             contextMenuNode = node;
             const nodeId = node.id();
+            const expandItem = document.getElementById('ctx-expand');
+            if (isExpandableNode(nodeId)) {
+                expandItem.style.display = 'block';
+                expandItem.textContent = expandedNodes.has(nodeId) ? 'Collapse' : 'Expand';
+            } else {
+                expandItem.style.display = 'none';
+            }
             const drillItem = document.getElementById('ctx-drill-in');
             drillItem.style.display = isDrillableNode(nodeId) ? 'block' : 'none';
             const hideShowItem = document.getElementById('ctx-hide-show');
@@ -1352,6 +1399,12 @@
         function hideContextMenu() {
             document.getElementById('context-menu').style.display = 'none';
             contextMenuNode = null;
+        }
+
+        function ctxExpand() {
+            const nodeId = contextMenuNode ? contextMenuNode.id() : null;
+            hideContextMenu();
+            if (nodeId) toggleExpand(nodeId);
         }
 
         function ctxDrillIn() {
@@ -1575,6 +1628,16 @@
                             'background-color': colors.nodeHover,
                             'color': colors.nodeHoverText,
                             'border-color': '#d68910',
+                        }
+                    },
+                    {
+                        selector: 'node:parent',
+                        style: {
+                            'text-valign': 'top',
+                            'text-halign': 'center',
+                            'padding': 20,
+                            'background-opacity': 0.15,
+                            'border-style': 'dashed',
                         }
                     },
                 ],
@@ -1896,6 +1959,68 @@
                             borderColor: isClickable ? '#d68910' : '#2980b9',
                         }
                     });
+
+                    if (expandedNodes.has(childId) && functionData[childId]) {
+                        // Add class/function children as compound children
+                        const fns = functionData[childId];
+                        Object.entries(fns).forEach(([name, info]) => {
+                            const childNodeId = childId + ':' + name;
+                            const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0)
+                                                   || (info.calls && info.calls.length > 0);
+                            elements.push({
+                                data: {
+                                    id: childNodeId,
+                                    label: name,
+                                    parent: childId,
+                                    nodeType: info.type === 'class' ? 'class' : 'function',
+                                    borderWidth: hasMethodsOrCalls ? 3 : 2,
+                                    borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
+                                    hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
+                                    visibility: info.visibility || null,
+                                }
+                            });
+                        });
+
+                        // Internal call/inherits edges within expanded package
+                        Object.entries(fns).forEach(([name, info]) => {
+                            if (info.calls) {
+                                info.calls.forEach(calledName => {
+                                    if (fns[calledName]) {
+                                        const edgeId = childId + ':' + name + '->' + calledName;
+                                        if (!elements.find(el => el.data.id === edgeId))
+                                            elements.push({ data: { id: edgeId, source: childId + ':' + name, target: childId + ':' + calledName, type: 'call' } });
+                                    }
+                                });
+                            }
+                            if (info.inherits) {
+                                info.inherits.forEach(baseName => {
+                                    if (fns[baseName]) {
+                                        const edgeId = childId + ':' + name + '->inherits-' + baseName;
+                                        if (!elements.find(el => el.data.id === edgeId))
+                                            elements.push({ data: { id: edgeId, source: childId + ':' + name, target: childId + ':' + baseName, type: 'inherits' } });
+                                    }
+                                });
+                            }
+                        });
+
+                        // Same-package class_deps edges (targets without '.' are same-package classes)
+                        const classDeps = hierarchy[childId] && hierarchy[childId].class_deps;
+                        if (classDeps) {
+                            const childNodeIds = new Set(Object.keys(fns).map(n => childId + ':' + n));
+                            Object.entries(classDeps).forEach(([srcClass, targets]) => {
+                                const srcId = childId + ':' + srcClass;
+                                if (!childNodeIds.has(srcId)) return;
+                                targets.forEach(target => {
+                                    if (target.includes('.')) return; // cross-package: can't resolve to class node
+                                    const tgtId = childId + ':' + target;
+                                    if (!childNodeIds.has(tgtId) || srcId === tgtId) return;
+                                    const edgeId = srcId + '->cdep-' + target;
+                                    if (!elements.find(el => el.data.id === edgeId))
+                                        elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
+                                });
+                            });
+                        }
+                    }
                 });
 
                 children.forEach(childId => {
@@ -2080,8 +2205,15 @@
             return elements;
         }
 
+        function toggleExpand(nodeId) {
+            if (expandedNodes.has(nodeId)) expandedNodes.delete(nodeId);
+            else expandedNodes.add(nodeId);
+            updateUI();
+        }
+
         function drillInto(nodeId) {
             if (!nodeId.includes(':') && !hierarchy[nodeId]) return;
+            expandedNodes.clear();
             currentNode = nodeId;
             history.push(nodeId);
             updateUI();
@@ -2089,6 +2221,7 @@
 
         function goUp() {
             if (history.length > 1) {
+                expandedNodes.clear();
                 history.pop();
                 currentNode = history[history.length - 1];
                 updateUI();
@@ -2096,6 +2229,7 @@
         }
 
         function reset() {
+            expandedNodes.clear();
             currentNode = MULTI_ROOT ? TOP_LEVEL : ROOT_IDS[0];
             history.length = 1;
             history[0] = currentNode;

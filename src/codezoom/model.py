@@ -16,6 +16,7 @@ class SymbolData:
     inherits: list[str] = field(default_factory=list)
     children: dict[str, SymbolData] = field(default_factory=dict)
     visibility: str | None = None  # "public", "protected", "package", "private"
+    origin: str | None = None  # dotted module path this symbol was re-exported from
 
 
 @dataclass

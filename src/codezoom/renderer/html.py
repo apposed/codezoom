@@ -23,6 +23,8 @@ def _symbol_to_dict(sym: SymbolData) -> dict:
         d["methods"] = {k: _symbol_to_dict(v) for k, v in sym.children.items()}
     if sym.visibility is not None:
         d["visibility"] = sym.visibility
+    if sym.origin is not None:
+        d["origin"] = sym.origin
     return d
 
 

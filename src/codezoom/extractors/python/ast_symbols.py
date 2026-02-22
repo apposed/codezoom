@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import warnings
 from pathlib import Path
 
@@ -39,7 +40,22 @@ class AstSymbolsExtractor:
                 if node is None:
                     node = NodeData()
                     graph.hierarchy[module_name] = node
+
+                # Downgrade all symbols to private if the module itself is private
+                if not graph.hierarchy[module_name].is_exported:
+                    for sym in symbols.values():
+                        sym.visibility = "private"
+                        for child in sym.children.values():
+                            child.visibility = "private"
+
                 node.symbols = symbols
+
+        # Second pass: surface __all__ re-exports onto package nodes
+        for init_file in src_dir.rglob("__init__.py"):
+            relative = init_file.parent.relative_to(src_dir.parent)
+            package_name = str(relative).replace("/", ".").replace("\\", ".")
+
+            _extract_reexports(init_file, package_name, graph)
 
 
 def _find_source_dir(project_dir: Path, root_node_id: str) -> Path | None:
@@ -79,6 +95,70 @@ def _ensure_parents_exist(graph: ProjectGraph, module_name: str) -> None:
         parent_node = graph.hierarchy[parent_name]
         if child_name not in parent_node.children:
             parent_node.children.append(child_name)
+
+
+def _extract_reexports(init_file: Path, package_name: str, graph: ProjectGraph) -> None:
+    """Parse __init__.py and attach __all__ re-exports as symbols on the package node."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(init_file.read_text())
+    except (OSError, SyntaxError):
+        return
+
+    # Collect __all__ names
+    all_names: set[str] = set()
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "__all__"
+            and isinstance(node.value, ast.List)
+        ):
+            for elt in node.value.elts:
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                    all_names.add(elt.value)
+
+    if not all_names:
+        return
+
+    # Build map: name -> source submodule (dotted path) from relative imports
+    # e.g. `from ._core import Artifact` -> {"Artifact": "pkg._core"}
+    import_map: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level == 0 or node.module is None:
+            continue  # only relative imports matter here
+        # Resolve relative module: level=1 means same package
+        source_module = package_name + "." + node.module
+        for alias in node.names:
+            import_map[alias.asname or alias.name] = source_module
+
+    # Attach re-exported symbols to the package node
+    package_node = graph.hierarchy.get(package_name)
+    if package_node is None:
+        package_node = NodeData()
+        graph.hierarchy[package_name] = package_node
+    if package_node.symbols is None:
+        package_node.symbols = {}
+
+    for name in sorted(all_names):
+        source_module = import_map.get(name)
+        if source_module is None:
+            continue
+        source_node = graph.hierarchy.get(source_module)
+        if source_node is None or source_node.symbols is None:
+            continue
+        sym = source_node.symbols.get(name)
+        if sym is None:
+            continue
+        # Deep-copy so mutations don't affect the private-module copy
+        reexport = copy.deepcopy(sym)
+        reexport.visibility = "public"
+        reexport.origin = source_module
+        package_node.symbols[name] = reexport
 
 
 class _CallExtractor(ast.NodeVisitor):

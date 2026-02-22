@@ -2063,6 +2063,7 @@
                     const childHasFunctions = functionData[childId];
                     const isClickable = hasChildren || childHasFunctions;
 
+                    const isPrivate = childNode && childNode.is_exported === false;
                     elements.push({
                         data: {
                             id: childId,
@@ -2070,6 +2071,7 @@
                             nodeType: isClickable ? 'clickable' : 'regular',
                             borderWidth: isClickable ? 3 : 2,
                             borderColor: isClickable ? '#d68910' : '#2980b9',
+                            visibility: isPrivate ? 'private' : null,
                         }
                     });
 
@@ -2080,16 +2082,18 @@
                             const childNodeId = childId + ':' + name;
                             const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0)
                                                    || (info.calls && info.calls.length > 0);
+                            const originShort = info.origin ? info.origin.split('.').pop() : null;
                             elements.push({
                                 data: {
                                     id: childNodeId,
-                                    label: name,
+                                    label: originShort ? name + '\n↗ ' + originShort : name,
                                     parent: childId,
                                     nodeType: info.type === 'class' ? 'class' : 'function',
                                     borderWidth: hasMethodsOrCalls ? 3 : 2,
                                     borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                                     hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                                     visibility: info.visibility || null,
+                                    origin: info.origin || null,
                                 }
                             });
                         });
@@ -2157,16 +2161,18 @@
                 Object.entries(functions).forEach(([name, info]) => {
                     const nodeFullId = nodeId + ':' + name;
                     const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0) || (info.calls && info.calls.length > 0);
+                    const originShort = info.origin ? info.origin.split('.').pop() : null;
 
                     elements.push({
                         data: {
                             id: nodeFullId,
-                            label: name,
+                            label: originShort ? name + '\n↗ ' + originShort : name,
                             nodeType: info.type === 'class' ? 'class' : 'function',
                             borderWidth: hasMethodsOrCalls ? 3 : 2,
                             borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                             hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                             visibility: info.visibility || null,
+                            origin: info.origin || null,
                         }
                     });
                 });
@@ -2203,16 +2209,18 @@
             Object.entries(functions).forEach(([name, info]) => {
                 const hasMethodsOrCalls = (info.methods && Object.keys(info.methods).length > 0) || (info.calls && info.calls.length > 0);
                 let borderWidth = hasMethodsOrCalls ? 3 : 2;
+                const originShort = info.origin ? info.origin.split('.').pop() : null;
 
                 elements.push({
                     data: {
                         id: moduleId + ':' + name,
-                        label: name,
+                        label: originShort ? name + '\n↗ ' + originShort : name,
                         nodeType: info.type === 'class' ? 'class' : 'function',
                         borderWidth: borderWidth,
                         borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                         hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                         visibility: info.visibility || null,
+                        origin: info.origin || null,
                     }
                 });
             });

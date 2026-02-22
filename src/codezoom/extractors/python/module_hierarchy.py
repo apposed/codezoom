@@ -179,5 +179,7 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
             imports_to=sorted(raw["imports_to"]),
             imports_from=sorted(raw["imports_from"]),
             symbols=existing.symbols if existing else None,
-            is_exported=existing.is_exported if existing else True,
+            is_exported=existing.is_exported
+            if existing
+            else not node_id.split(".")[-1].startswith("_"),
         )

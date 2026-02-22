@@ -51,3 +51,4 @@ class ProjectGraph:
     external_deps: list[ExternalDep] = field(default_factory=list)
     external_deps_graph: dict[str, list[str]] = field(default_factory=dict)
     module_direct_deps: dict[str, list[str]] = field(default_factory=dict)
+    cycles: list[list[str]] = field(default_factory=list)

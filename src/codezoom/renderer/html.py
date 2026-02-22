@@ -61,6 +61,7 @@ def _graph_to_json(graph: ProjectGraph) -> str:
         "external_deps_direct": external_deps_direct,
         "external_deps_graph": graph.external_deps_graph,
         "module_direct_deps": graph.module_direct_deps,
+        "cycles": graph.cycles,
     }
     return json.dumps(data)
 

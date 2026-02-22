@@ -682,6 +682,10 @@
             <div class="control-row">
                 <div class="section-label">Display</div>
                 <label class="checkbox-label">
+                    <input type="checkbox" id="showCycles" onchange="applyHighlights()">
+                    <span>&#x1f504; Highlight cycles</span> <!-- Counterclockwise Arrows -->
+                </label>
+                <label class="checkbox-label">
                     <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
                     <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
                 </label>
@@ -765,6 +769,13 @@
         const MULTI_ROOT = ROOT_IDS.length > 1;
         const TOP_LEVEL = '__codezoom_top__';
         let expandedNodes = new Set(); // IDs of package nodes expanded as compound containers
+
+        // Cycle detection data: map nodeId -> cycle group index (0-based)
+        const cycles = data.cycles || [];
+        const cycleNodeMap = new Map();
+        cycles.forEach((group, idx) => {
+            group.forEach(nodeId => cycleNodeMap.set(nodeId, idx));
+        });
 
         // Set page title
         document.getElementById('titleText').textContent = 'codezoom | ' + data.project_name;
@@ -1583,7 +1594,7 @@
                 node.style('underlay-opacity', 0);
             });
 
-            if (highlightSelections.length === 0) return;
+            if (highlightSelections.length > 0) {
 
             // Build neighbor hit map: nodeId -> array of colorIndex values
             const neighborHits = {};
@@ -1678,6 +1689,45 @@
                 if (neighborHits[nId]) return;
                 if (userHiddenNodes.has(nId)) return;
                 node.style('opacity', 0.4);
+            });
+
+            } // end if (highlightSelections.length > 0)
+
+            applyCycleHighlight();
+        }
+
+        // Palette of distinct colors for cycle groups
+        const cycleColors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#16a085'];
+
+        function applyCycleHighlight() {
+            if (!cy || cycles.length === 0) return;
+            const show = document.getElementById('showCycles') && document.getElementById('showCycles').checked;
+            if (!show) return;
+
+            cy.nodes().forEach(node => {
+                const cg = node.data('cycleGroup');
+                if (cg === null || cg === undefined) {
+                    node.style('opacity', 0.25);
+                } else {
+                    const color = cycleColors[cg % cycleColors.length];
+                    node.style('opacity', 1.0);
+                    node.style('underlay-color', color);
+                    node.style('underlay-opacity', 0.45);
+                    node.style('underlay-padding', 8);
+                    node.style('border-color', color);
+                    node.style('border-width', 5);
+                }
+            });
+
+            cy.edges().forEach(edge => {
+                const srcCg = edge.source().data('cycleGroup');
+                const tgtCg = edge.target().data('cycleGroup');
+                if (srcCg !== null && srcCg !== undefined && srcCg === tgtCg) {
+                    const color = cycleColors[srcCg % cycleColors.length];
+                    edge.style({ 'line-color': color, 'target-arrow-color': color, 'opacity': 1.0, 'width': 3 });
+                } else {
+                    edge.style({ 'opacity': 0.15 });
+                }
             });
         }
 
@@ -1783,8 +1833,8 @@
                 const node = evt.target;
                 const colors = themes[currentTheme];
                 applyColorsToNode(node, colors);
-                // Reapply highlights so highlighted/neighbor tints aren't lost
-                if (highlightSelections.length > 0) applyHighlights();
+                // Reapply highlights and cycle overlay so tints aren't lost on mouseout
+                applyHighlights();
             });
 
             // Double-click to drill into a node
@@ -1863,7 +1913,7 @@
             setTimeout(() => {
                 applyNodeColors();
                 applyVisibilityFilter();  // Apply filter after layout
-                if (highlightSelections.length > 0) applyHighlights();
+                applyHighlights();
                 cy.fit();
                 syncZoomSlider();  // Set up zoom event listener
                 updateDisplayButtons();  // Reset Display buttons for new graph
@@ -1988,6 +2038,7 @@
                                     borderWidth: 3,
                                     borderColor: '#c0392b',
                                     isClickable: isClickable,
+                                    cycleGroup: cycleNodeMap.has(rootId) ? cycleNodeMap.get(rootId) : null,
                                 }
                             });
 
@@ -2025,6 +2076,7 @@
                                 nodeType: 'root',
                                 borderWidth: 3,
                                 borderColor: '#c0392b',
+                                cycleGroup: cycleNodeMap.has(rootId) ? cycleNodeMap.get(rootId) : null,
                             }
                         });
 
@@ -2072,6 +2124,7 @@
                             borderWidth: isClickable ? 3 : 2,
                             borderColor: isClickable ? '#d68910' : '#2980b9',
                             visibility: isPrivate ? 'private' : null,
+                            cycleGroup: cycleNodeMap.has(childId) ? cycleNodeMap.get(childId) : null,
                         }
                     });
 

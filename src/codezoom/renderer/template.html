@@ -15,6 +15,8 @@
     <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
     <!-- tidytree layout -->
     <script src="https://unpkg.com/cytoscape-tidytree@0.2.1/dist/cytoscape-tidytree.min.js"></script>
+    <!-- SVG export -->
+    <script src="https://unpkg.com/cytoscape-svg@0.3.0/cytoscape-svg.js"></script>
     <style>
         :root {
             /* Light theme (default) */
@@ -693,6 +695,15 @@
                     <button id="hideShowBtn" onclick="toggleHideShowSelected()" title="Hide selected nodes" disabled>&#x1f441;&#xfe0f;</button> <!-- Eye -->
                     <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
                     <button id="expandBtn" onclick="toggleExpandSelected()" title="Expand selected nodes" disabled>&#x229e;</button> <!-- Squared Plus -->
+                </div>
+            </div>
+
+            <!-- Export -->
+            <div class="control-row">
+                <div class="section-label">Export</div>
+                <div class="layout-toolbar">
+                    <button id="exportPngBtn" onclick="exportPNG()" title="Export as PNG image">&#x1f4f7;</button> <!-- Camera -->
+                    <button id="exportSvgBtn" onclick="exportSVG()" title="Export as SVG vector image">&#x1f5bc;&#xfe0f;</button> <!-- Frame with Picture -->
                 </div>
             </div>
         </div>
@@ -2999,6 +3010,45 @@
             const menu = document.getElementById('context-menu');
             if (menu && !menu.contains(e.target)) hideContextMenu();
         });
+
+        // Export helpers
+        function exportFilename() {
+            const parts = [data.project_name];
+            if (currentNode !== TOP_LEVEL && currentNode !== ROOT_IDS[0]) {
+                parts.push(currentNode);
+            }
+            return parts.join('-').replace(/[^a-zA-Z0-9._-]/g, '-');
+        }
+
+        function flashExportBtn(id, origHTML) {
+            const btn = document.getElementById(id);
+            btn.innerHTML = '&#x2714;'; // Check mark
+            btn.disabled = true;
+            setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1500);
+        }
+
+        function exportPNG() {
+            const bg = window.getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+            const uri = cy.png({ full: true, scale: 2, bg });
+            const a = document.createElement('a');
+            a.download = exportFilename() + '.png';
+            a.href = uri;
+            a.click();
+            flashExportBtn('exportPngBtn', '&#x1f4f7;');
+        }
+
+        function exportSVG() {
+            const bg = window.getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+            const svgContent = cy.svg({ full: true, bg });
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.download = exportFilename() + '.svg';
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+            flashExportBtn('exportSvgBtn', '&#x1f5bc;&#xfe0f;');
+        }
 
         // Initialize
         updateUI();

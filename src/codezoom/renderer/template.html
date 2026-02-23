@@ -548,6 +548,21 @@
             color: var(--text-primary);
             width: 100%;
         }
+
+        #edge-tooltip {
+            position: fixed;
+            display: none;
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 6px var(--shadow-color);
+            font-size: 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -638,6 +653,10 @@
                     <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
                     <button id="expandBtn" onclick="toggleExpandSelected()" title="Expand selected nodes" disabled>&#x229e;</button> <!-- Squared Plus -->
                 </div>
+                <label class="checkbox-label" title="Scale edge thickness by number of cross-module calls. Hover an edge to see its count.">
+                    <input type="checkbox" id="weightedEdges" onchange="applyVisibilityFilter()">
+                    <span>&#x1f5ff; Weighted edges</span> <!-- Moyai -->
+                </label>
                 <label class="checkbox-label">
                     <input type="checkbox" id="showCycles" onchange="applyHighlights()">
                     <span>&#x1f504; Highlight cycles</span> <!-- Counterclockwise Arrows -->
@@ -710,6 +729,7 @@
     <div id="main-content">
         <div id="cy"></div>
     </div>
+    <div id="edge-tooltip"></div>
 
     <!-- Right-click context menu -->
     <div id="context-menu">
@@ -1577,22 +1597,15 @@
             applyNodeColors();
 
             // Reset all edges to base style
+            const showWeighted = document.getElementById('weightedEdges').checked;
             cy.edges().forEach(edge => {
-                if (edge.data('type') === 'inherits') {
-                    edge.style({
-                        'line-color': colors.nodeRoot,
-                        'target-arrow-color': colors.nodeRoot,
-                        'width': 3,
-                        'opacity': 0.7
-                    });
-                } else {
-                    edge.style({
-                        'line-color': colors.edgeLine,
-                        'target-arrow-color': colors.edgeArrow,
-                        'width': 2,
-                        'opacity': 0.7
-                    });
-                }
+                const isInherits = edge.data('type') === 'inherits';
+                edge.style({
+                    'line-color': isInherits ? colors.nodeRoot : colors.edgeLine,
+                    'target-arrow-color': isInherits ? colors.nodeRoot : colors.edgeArrow,
+                    'width': showWeighted ? computeEdgeWidth(edge.data('weight'), isInherits) : (isInherits ? 3 : 2),
+                    'opacity': 0.7
+                });
             });
 
             // Reset all node opacities and underlay (unless user-hidden)
@@ -1846,6 +1859,27 @@
                 applyHighlights();
             });
 
+            // Edge hover tooltip (shows weight and/or cycle status)
+            const edgeTooltip = document.getElementById('edge-tooltip');
+            cy.on('mouseover', 'edge', function(evt) {
+                const edge = evt.target;
+                const w = edge.data('weight');
+                const parts = [];
+                if (w > 1) parts.push(w + ' cross-module calls');
+                if (parts.length === 0) return;
+                edgeTooltip.textContent = parts.join(' \u00b7 ');
+                edgeTooltip.style.display = 'block';
+                const pos = evt.renderedPosition || evt.cyRenderedPosition;
+                if (pos) {
+                    const cyRect = cy.container().getBoundingClientRect();
+                    edgeTooltip.style.left = (cyRect.left + pos.x + 12) + 'px';
+                    edgeTooltip.style.top = (cyRect.top + pos.y - 10) + 'px';
+                }
+            });
+            cy.on('mouseout', 'edge', function() {
+                edgeTooltip.style.display = 'none';
+            });
+
             // Double-click to drill into a node
             cy.on('dbltap', 'node', function(evt) {
                 const nodeId = evt.target.id();
@@ -1975,6 +2009,58 @@
             }
 
             return current;
+        }
+
+        function computeModuleEdgeWeight(srcModuleId, tgtModuleId) {
+            let weight = 0;
+
+            // Java: count class_deps entries that reference the target module
+            const srcClassDeps = hierarchy[srcModuleId] && hierarchy[srcModuleId].class_deps;
+            if (srcClassDeps) {
+                Object.values(srcClassDeps).forEach(targets => {
+                    targets.forEach(target => {
+                        if (target.startsWith(tgtModuleId + ':') || target.startsWith(tgtModuleId + '.')) {
+                            weight++;
+                        }
+                    });
+                });
+            }
+
+            // Python/other: count function/method calls from src that resolve to target symbols
+            if (weight === 0 && functionData[srcModuleId] && functionData[tgtModuleId]) {
+                const targetSymbols = new Set();
+                Object.entries(functionData[tgtModuleId]).forEach(([name, info]) => {
+                    targetSymbols.add(name);
+                    if (info.methods) {
+                        Object.keys(info.methods).forEach(mname => {
+                            targetSymbols.add(mname.replace(/\(.*\)$/, ''));
+                        });
+                    }
+                });
+
+                function countCalls(calls) {
+                    if (!calls) return;
+                    calls.forEach(call => {
+                        const bare = call.replace(/\(.*\)$/, '');
+                        if (targetSymbols.has(bare)) { weight++; return; }
+                        const dot = bare.lastIndexOf('.');
+                        if (dot !== -1 && targetSymbols.has(bare.substring(dot + 1))) weight++;
+                    });
+                }
+
+                Object.values(functionData[srcModuleId]).forEach(info => {
+                    countCalls(info.calls);
+                    if (info.methods) Object.values(info.methods).forEach(minfo => countCalls(minfo.calls));
+                });
+            }
+
+            return weight || 1;
+        }
+
+        function computeEdgeWidth(weight, isInherits) {
+            if (isInherits) return 3;
+            if (!weight || weight <= 1) return 2;
+            return Math.min(2 + Math.log2(weight) * 1.5, 10);
         }
 
         function buildGraphData(nodeId) {
@@ -2209,7 +2295,7 @@
                             if (childSet.has(targetId) && childId !== targetId) {
                                 const edgeId = childId + '->' + targetId;
                                 if (!elements.find(el => el.data.id === edgeId)) {
-                                    elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import' } });
+                                    elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import', weight: computeModuleEdgeWeight(childId, targetId) } });
                                 }
                             }
                         });
@@ -2630,6 +2716,14 @@
                 } else {
                     edge.style('display', 'none');
                 }
+            });
+
+            // Apply weighted edge widths
+            const showWeighted = document.getElementById('weightedEdges').checked;
+            cy.edges().forEach(edge => {
+                if (edge.style('display') === 'none') return;
+                const isInherits = edge.data('type') === 'inherits';
+                edge.style('width', showWeighted ? computeEdgeWidth(edge.data('weight'), isInherits) : (isInherits ? 3 : 2));
             });
         }
 

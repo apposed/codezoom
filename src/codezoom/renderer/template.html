@@ -1333,19 +1333,19 @@
             const d = node.data();
             const type = d.nodeType || 'regular'; // Default to regular
 
-            // Simple type-to-color mapping
+            // Simple type-to-color mapping: [background, text, border]
             const colorMap = {
-                'root': [colors.nodeRoot, colors.nodeRootText],
-                'clickable': [colors.nodeClickable, colors.nodeClickableText],
-                'regular': [colors.nodeRegular, colors.nodeRegularText],
-                'class': [colors.nodeClass, colors.nodeClassText],
-                'function': [colors.nodeFunction, colors.nodeFunctionText],
-                'method': [colors.nodeMethod, colors.nodeMethodText],
-                'external-direct': [colors.nodeExternalDirect, colors.nodeExternalDirectText],
-                'external-indirect': [colors.nodeExternalIndirect, colors.nodeExternalIndirectText],
+                'root': [colors.nodeRoot, colors.nodeRootText, colors.nodeRoot],
+                'clickable': [colors.nodeClickable, colors.nodeClickableText, colors.nodeClickable],
+                'regular': [colors.nodeRegular, colors.nodeRegularText, colors.nodeRegular],
+                'class': [colors.nodeClass, colors.nodeClassText, colors.nodeClass],
+                'function': [colors.nodeFunction, colors.nodeFunctionText, colors.nodeFunction],
+                'method': [colors.nodeMethod, colors.nodeMethodText, colors.nodeMethod],
+                'external-direct': [colors.nodeExternalDirect, colors.nodeExternalDirectText, colors.nodeExternalDirect],
+                'external-indirect': [colors.nodeExternalIndirect, colors.nodeExternalIndirectText, colors.nodeExternalIndirect],
             };
 
-            const [bgColor, textColor] = colorMap[type] || [colors.nodeRegular, colors.nodeRegularText];
+            const [bgColor, textColor, borderColor] = colorMap[type] || [colors.nodeRegular, colors.nodeRegularText, colors.nodeRegular];
 
             // Choose outline color based on text color brightness
             const outlineColor = isLightColor(textColor) ? colors.textOutlineDark : colors.textOutlineLight;
@@ -1355,7 +1355,7 @@
             node.style('text-outline-color', outlineColor);
 
             if (d.borderWidth) node.style('border-width', d.borderWidth);
-            if (d.borderColor) node.style('border-color', d.borderColor);
+            node.style('border-color', borderColor);
 
             // Apply border style based on visibility
             const borderStyle = getBorderStyleForVisibility(d.visibility);
@@ -1718,13 +1718,79 @@
             applyCycleHighlight();
         }
 
-        // Palette of distinct colors for cycle groups
-        const cycleColors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#16a085'];
+        function getCycleColors(count) {
+            // Generate cycle colors maximally distant from current theme hues
+            const colors = themes[currentTheme];
+            const themeHexColors = [
+                colors.nodeRoot, colors.nodeClickable, colors.nodeRegular,
+                colors.nodeClass, colors.nodeFunction, colors.nodeMethod,
+                colors.nodeExternalDirect, colors.nodeExternalIndirect,
+                colors.nodeHover, colors.edgeLine, colors.edgeArrow,
+            ];
+
+            // Extract hues (0-360) from theme colors
+            function hexToHue(hex) {
+                hex = hex.replace('#', '');
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                const r = parseInt(hex.substr(0, 2), 16) / 255;
+                const g = parseInt(hex.substr(2, 2), 16) / 255;
+                const b = parseInt(hex.substr(4, 2), 16) / 255;
+                if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+                const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                if (max - min < 0.05) return null; // achromatic
+                let h;
+                if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+                else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+                else h = 60 * ((r - g) / (max - min) + 4);
+                return ((h % 360) + 360) % 360;
+            }
+
+            const themeHues = themeHexColors.map(hexToHue).filter(h => h !== null);
+
+            // Find N hues maximally distant from theme hues and each other
+            function angularDist(a, b) {
+                const d = Math.abs(a - b) % 360;
+                return Math.min(d, 360 - d);
+            }
+            function minDist(candidate, occupied) {
+                let min = 360;
+                for (const h of occupied) min = Math.min(min, angularDist(candidate, h));
+                return min;
+            }
+
+            const chosen = [];
+            const occupied = [...themeHues];
+            for (let i = 0; i < count; i++) {
+                let bestHue = 0, bestScore = -1;
+                for (let h = 0; h < 360; h += 3) {
+                    const score = minDist(h, occupied);
+                    if (score > bestScore) { bestScore = score; bestHue = h; }
+                }
+                occupied.push(bestHue);
+                // Convert hue to hex at high saturation + medium-high lightness
+                const s = 0.85, l = 0.55;
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((bestHue / 60) % 2 - 1));
+                const m = l - c / 2;
+                let r, g, b;
+                if (bestHue < 60)       { r = c; g = x; b = 0; }
+                else if (bestHue < 120) { r = x; g = c; b = 0; }
+                else if (bestHue < 180) { r = 0; g = c; b = x; }
+                else if (bestHue < 240) { r = 0; g = x; b = c; }
+                else if (bestHue < 300) { r = x; g = 0; b = c; }
+                else                    { r = c; g = 0; b = x; }
+                const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+                chosen.push('#' + toHex(r) + toHex(g) + toHex(b));
+            }
+            return chosen;
+        }
 
         function applyCycleHighlight() {
             if (!cy || cycles.length === 0) return;
             const show = document.getElementById('showCycles') && document.getElementById('showCycles').checked;
             if (!show) return;
+
+            const cycleColors = getCycleColors(cycles.length);
 
             cy.nodes().forEach(node => {
                 const cg = node.data('cycleGroup');
@@ -1777,7 +1843,7 @@
                             'text-halign': 'center',
                             'background-color': colors.nodeRegular,
                             'border-width': 2,
-                            'border-color': '#2980b9',
+                            'border-color': colors.nodeRegular,
                             'background-opacity': 0.9,
                             'text-outline-width': 1.5,
                             'text-outline-color': colors.textOutlineDark,
@@ -1812,7 +1878,7 @@
                         style: {
                             'background-color': colors.nodeHover,
                             'color': colors.nodeHoverText,
-                            'border-color': '#d68910',
+                            'border-color': colors.nodeHover,
                         }
                     },
                     {
@@ -2098,7 +2164,6 @@
                                 label: dep.replace(':', '\n'),
                                 nodeType: isDirect ? 'external-direct' : 'external-indirect',
                                 borderWidth: isDirect ? 2 : 1,
-                                borderColor: isDirect ? '#2c3e50' : '#7f8c8d',
                             }
                         });
                     });
@@ -2131,7 +2196,6 @@
                                     label: rootId,
                                     nodeType: 'root',
                                     borderWidth: 3,
-                                    borderColor: '#c0392b',
                                     isClickable: isClickable,
                                     cycleGroup: cycleNodeMap.has(rootId) ? cycleNodeMap.get(rootId) : null,
                                 }
@@ -2170,7 +2234,6 @@
                                 label: data.project_name,
                                 nodeType: 'root',
                                 borderWidth: 3,
-                                borderColor: '#c0392b',
                                 cycleGroup: cycleNodeMap.has(rootId) ? cycleNodeMap.get(rootId) : null,
                             }
                         });
@@ -2217,7 +2280,6 @@
                             label: childId.split('.').pop(),
                             nodeType: isClickable ? 'clickable' : 'regular',
                             borderWidth: isClickable ? 3 : 2,
-                            borderColor: isClickable ? '#d68910' : '#2980b9',
                             visibility: isPrivate ? 'private' : null,
                             cycleGroup: cycleNodeMap.has(childId) ? cycleNodeMap.get(childId) : null,
                         }
@@ -2238,7 +2300,6 @@
                                     parent: childId,
                                     nodeType: info.type === 'class' ? 'class' : 'function',
                                     borderWidth: hasMethodsOrCalls ? 3 : 2,
-                                    borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                                     hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                                     visibility: info.visibility || null,
                                     origin: info.origin || null,
@@ -2317,7 +2378,6 @@
                             label: originShort ? name + '\n↗ ' + originShort : name,
                             nodeType: info.type === 'class' ? 'class' : 'function',
                             borderWidth: hasMethodsOrCalls ? 3 : 2,
-                            borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                             hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                             visibility: info.visibility || null,
                             origin: info.origin || null,
@@ -2365,7 +2425,6 @@
                         label: originShort ? name + '\n↗ ' + originShort : name,
                         nodeType: info.type === 'class' ? 'class' : 'function',
                         borderWidth: borderWidth,
-                        borderColor: info.type === 'class' ? '#8e44ad' : '#117a65',
                         hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                         visibility: info.visibility || null,
                         origin: info.origin || null,
@@ -2448,7 +2507,6 @@
                         label: displayLabel,
                         nodeType: childInfo.type === 'class' ? 'class' : 'method',
                         borderWidth: 2,
-                        borderColor: childInfo.type === 'class' ? '#8e44ad' : '#c0392b',
                         visibility: childInfo.visibility || null,
                         hasChildren: childInfo.type === 'class' && childInfo.methods && Object.keys(childInfo.methods).length > 0,
                     }

@@ -1791,6 +1791,7 @@
             if (!show) return;
 
             const cycleColors = getCycleColors(cycles.length);
+            const showWeighted = document.getElementById('weightedEdges').checked;
 
             cy.nodes().forEach(node => {
                 const cg = node.data('cycleGroup');
@@ -1812,7 +1813,9 @@
                 const tgtCg = edge.target().data('cycleGroup');
                 if (srcCg !== null && srcCg !== undefined && srcCg === tgtCg) {
                     const color = cycleColors[srcCg % cycleColors.length];
-                    edge.style({ 'line-color': color, 'target-arrow-color': color, 'opacity': 1.0, 'width': 3 });
+                    const isInherits = edge.data('type') === 'inherits';
+                    const width = showWeighted ? computeEdgeWidth(edge.data('weight'), isInherits) : (isInherits ? 3 : 2);
+                    edge.style({ 'line-color': color, 'target-arrow-color': color, 'opacity': 1.0, 'width': width });
                 } else {
                     edge.style({ 'opacity': 0.15 });
                 }

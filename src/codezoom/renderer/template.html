@@ -631,6 +631,22 @@
                     </div>
                 </div>
             </div>
+            <div class="control-row">
+                <div class="section-label">Display</div>
+                <div class="layout-toolbar">
+                    <button id="hideShowBtn" onclick="toggleHideShowSelected()" title="Hide selected nodes" disabled>&#x1f441;&#xfe0f;</button> <!-- Eye -->
+                    <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
+                    <button id="expandBtn" onclick="toggleExpandSelected()" title="Expand selected nodes" disabled>&#x229e;</button> <!-- Squared Plus -->
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showCycles" onchange="applyHighlights()">
+                    <span>&#x1f504; Highlight cycles</span> <!-- Counterclockwise Arrows -->
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
+                    <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
+                </label>
+            </div>
 
             <!-- Nodes and Edges -->
             <div class="control-row">
@@ -677,24 +693,6 @@
                             <span>Uses</span>
                         </label>
                     </div>
-                </div>
-            </div>
-
-            <!-- Display -->
-            <div class="control-row">
-                <div class="section-label">Display</div>
-                <label class="checkbox-label">
-                    <input type="checkbox" id="showCycles" onchange="applyHighlights()">
-                    <span>&#x1f504; Highlight cycles</span> <!-- Counterclockwise Arrows -->
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" id="showHidden" onchange="toggleHiddenDisplay(this.checked)">
-                    <span>&#x1fae3; Peek at hidden</span> <!-- Face With Peeking Eye -->
-                </label>
-                <div class="layout-toolbar">
-                    <button id="hideShowBtn" onclick="toggleHideShowSelected()" title="Hide selected nodes" disabled>&#x1f441;&#xfe0f;</button> <!-- Eye -->
-                    <button id="highlightBtn" onclick="toggleHighlightSelected()" title="Highlight selected nodes" disabled>&#x2728;</button> <!-- Sparkles -->
-                    <button id="expandBtn" onclick="toggleExpandSelected()" title="Expand selected nodes" disabled>&#x229e;</button> <!-- Squared Plus -->
                 </div>
             </div>
 

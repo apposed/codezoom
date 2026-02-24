@@ -31,8 +31,10 @@ class AstSymbolsExtractor:
                 str(relative).replace("/", ".").replace("\\", ".").removesuffix(".py")
             )
 
-            symbols = _extract_symbols(py_file)
-            if symbols:
+            result = _extract_symbols(py_file)
+            if result:
+                symbols, class_deps = result
+
                 # Ensure parent packages exist in hierarchy
                 _ensure_parents_exist(graph, module_name)
 
@@ -49,6 +51,8 @@ class AstSymbolsExtractor:
                             child.visibility = "private"
 
                 node.symbols = symbols
+                if class_deps:
+                    node.class_deps = class_deps
 
         # Second pass: surface __all__ re-exports onto package nodes
         for init_file in src_dir.rglob("__init__.py"):
@@ -160,6 +164,28 @@ def _extract_reexports(init_file: Path, package_name: str, graph: ProjectGraph) 
         reexport.origin = source_module
         package_node.symbols[name] = reexport
 
+    # Propagate class_deps: for each re-exported class that has deps in its
+    # source module, keep only the deps that are also re-exported here.
+    pkg_class_deps: dict[str, list[str]] = {}
+    for name in sorted(all_names):
+        source_module = import_map.get(name)
+        if source_module is None:
+            continue
+        source_node = graph.hierarchy.get(source_module)
+        if source_node is None or source_node.class_deps is None:
+            continue
+        src_deps = source_node.class_deps.get(name)
+        if not src_deps:
+            continue
+        local_deps = [d for d in src_deps if d in all_names]
+        if local_deps:
+            pkg_class_deps[name] = local_deps
+
+    if pkg_class_deps:
+        if package_node.class_deps is None:
+            package_node.class_deps = {}
+        package_node.class_deps.update(pkg_class_deps)
+
 
 class _CallExtractor(ast.NodeVisitor):
     """Collect names called within a function/method body."""
@@ -174,6 +200,29 @@ class _CallExtractor(ast.NodeVisitor):
             if isinstance(node.func.value, ast.Name):
                 self.called_names.add(node.func.attr)
         self.generic_visit(node)
+
+
+def _collect_annotation_names(annotation: ast.expr) -> set[str]:
+    """Recursively collect all Name ids referenced in a type annotation.
+
+    Handles plain names (``Foo``), subscripts (``list[Foo]``), binary-or
+    unions (``Foo | None``), and tuples of types.
+    """
+    names: set[str] = set()
+    if isinstance(annotation, ast.Name):
+        names.add(annotation.id)
+    elif isinstance(annotation, ast.Attribute):
+        names.add(annotation.attr)
+    elif isinstance(annotation, ast.Subscript):
+        names.update(_collect_annotation_names(annotation.value))
+        names.update(_collect_annotation_names(annotation.slice))
+    elif isinstance(annotation, ast.BinOp):  # X | Y (PEP 604 union)
+        names.update(_collect_annotation_names(annotation.left))
+        names.update(_collect_annotation_names(annotation.right))
+    elif isinstance(annotation, ast.Tuple):
+        for elt in annotation.elts:
+            names.update(_collect_annotation_names(elt))
+    return names
 
 
 def _get_python_visibility(name: str) -> str:
@@ -193,8 +242,15 @@ def _get_python_visibility(name: str) -> str:
         return "public"
 
 
-def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
-    """Return symbol data for top-level functions and classes in *file_path*."""
+def _extract_symbols(
+    file_path: Path,
+) -> tuple[dict[str, SymbolData], dict[str, list[str]]] | None:
+    """Return (symbols, class_deps) for top-level functions and classes in *file_path*.
+
+    *class_deps* maps each class name to a sorted list of other top-level symbol
+    names in the same module that it depends on — via method calls or class-body
+    type annotations (e.g. dataclass field types).
+    """
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SyntaxWarning)
@@ -203,6 +259,8 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
         return None
 
     results: dict[str, SymbolData] = {}
+    # Annotation names collected from class bodies (dataclass fields, etc.)
+    class_body_annotations: dict[str, set[str]] = {}
 
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
@@ -225,6 +283,7 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                     bases.append(base.attr)
 
             methods: dict[str, SymbolData] = {}
+            ann_names: set[str] = set()
             for item in node.body:
                 if isinstance(item, ast.FunctionDef):
                     ext = _CallExtractor()
@@ -236,6 +295,13 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                         calls=sorted(ext.called_names),
                         visibility=_get_python_visibility(item.name),
                     )
+                elif isinstance(item, ast.AnnAssign):
+                    # Collect type names from class-body annotations (dataclass
+                    # fields, ClassVar, etc.) as structural dependencies.
+                    ann_names.update(_collect_annotation_names(item.annotation))
+
+            if ann_names:
+                class_body_annotations[node.name] = ann_names
 
             # Class-level calls (decorators, class-var assignments, etc.)
             ext = _CallExtractor()
@@ -253,4 +319,21 @@ def _extract_symbols(file_path: Path) -> dict[str, SymbolData] | None:
                 visibility=_get_python_visibility(node.name),
             )
 
-    return results or None
+    if not results:
+        return None
+
+    # Compute class_deps: for each class, union method calls and class-body
+    # annotation names, then filter to other top-level symbols in this module.
+    # This mirrors what jdeps provides for Java.
+    class_deps: dict[str, list[str]] = {}
+    for sym_name, sym in results.items():
+        if sym.kind != "class":
+            continue
+        all_refs: set[str] = set(class_body_annotations.get(sym_name, ()))
+        for method in sym.children.values():
+            all_refs.update(method.calls)
+        deps = sorted(n for n in all_refs if n in results and n != sym_name)
+        if deps:
+            class_deps[sym_name] = deps
+
+    return results, class_deps

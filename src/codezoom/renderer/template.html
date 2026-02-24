@@ -2407,6 +2407,19 @@
                         });
                     });
                 }
+
+                // Add inherits edges between symbols
+                Object.entries(functions).forEach(([name, info]) => {
+                    if (!info.inherits || info.inherits.length === 0) return;
+                    const srcId = nodeId + ':' + name;
+                    info.inherits.forEach(parentName => {
+                        if (!functions[parentName]) return;
+                        const edgeId = srcId + '-inherits-' + parentName;
+                        if (!elements.find(el => el.data.id === edgeId)) {
+                            elements.push({ data: { id: edgeId, source: srcId, target: nodeId + ':' + parentName, type: 'inherits' } });
+                        }
+                    });
+                });
             }
 
             return elements;

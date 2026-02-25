@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-from codezoom.analysis import find_cycles
+from codezoom.analysis import find_class_cycles, find_cycles
 from codezoom.detect import detect_extractors
 from codezoom.model import ProjectGraph
 from codezoom.renderer.html import render_html
@@ -220,7 +220,7 @@ def run(
         if ext.can_handle(project_dir):
             ext.extract(project_dir, graph)
 
-    graph.cycles = find_cycles(graph.hierarchy)
+    graph.cycles = find_cycles(graph.hierarchy) + find_class_cycles(graph.hierarchy)
     logger.debug("Cycles detected: %d", len(graph.cycles))
 
     out_path = output or (project_dir / "codezoom.html")

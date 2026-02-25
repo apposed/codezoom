@@ -2126,6 +2126,21 @@
             return weight || 1;
         }
 
+        function computeClassEdgeWeight(moduleId, srcClass, tgtClass) {
+            // Count method calls from srcClass that reference tgtClass.
+            // Call entries for cross-class invocations have the form "TgtClass.method(params)".
+            const functions = functionData[moduleId];
+            if (!functions) return 1;
+            const srcInfo = functions[srcClass];
+            if (!srcInfo || !srcInfo.methods) return 1;
+            const prefix = tgtClass + '.';
+            let weight = 0;
+            Object.values(srcInfo.methods).forEach(minfo => {
+                if (minfo.calls) minfo.calls.forEach(call => { if (call.startsWith(prefix)) weight++; });
+            });
+            return weight || 1;
+        }
+
         function computeEdgeWidth(weight, isInherits) {
             if (isInherits) return 3;
             if (!weight || weight <= 1) return 2;
@@ -2345,7 +2360,7 @@
                                     if (!childNodeIds.has(tgtId) || srcId === tgtId) return;
                                     const edgeId = srcId + '->cdep-' + target;
                                     if (!elements.find(el => el.data.id === edgeId))
-                                        elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
+                                        elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency', weight: computeClassEdgeWeight(childId, srcClass, target) } });
                                 });
                             });
                         }
@@ -2398,11 +2413,13 @@
                         if (!nodeIds.has(srcId)) return;
                         targets.forEach(target => {
                             // target with '.' is a package node ID; without is a same-package class
-                            const tgtId = target.includes('.') ? target : nodeId + ':' + target;
+                            const isSamePkg = !target.includes('.');
+                            const tgtId = isSamePkg ? nodeId + ':' + target : target;
                             if (!nodeIds.has(tgtId) || srcId === tgtId) return;
                             const edgeId = srcId + '->dep-' + target;
                             if (!elements.find(el => el.data.id === edgeId)) {
-                                elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
+                                const weight = isSamePkg ? computeClassEdgeWeight(nodeId, srcClass, target) : 1;
+                                elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency', weight } });
                             }
                         });
                     });
@@ -2483,11 +2500,13 @@
                     if (!nodeIds.has(srcId)) return;
                     targets.forEach(target => {
                         // target with '.' is a package node ID; without is a same-package class
-                        const tgtId = target.includes('.') ? target : moduleId + ':' + target;
+                        const isSamePkg = !target.includes('.');
+                        const tgtId = isSamePkg ? moduleId + ':' + target : target;
                         if (!nodeIds.has(tgtId) || srcId === tgtId) return;
                         const edgeId = srcId + '->dep-' + target;
                         if (!elements.find(el => el.data.id === edgeId)) {
-                            elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency' } });
+                            const weight = isSamePkg ? computeClassEdgeWeight(moduleId, srcClass, target) : 1;
+                            elements.push({ data: { id: edgeId, source: srcId, target: tgtId, type: 'dependency', weight } });
                         }
                     });
                 });

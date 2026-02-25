@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
-import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -60,39 +59,41 @@ def _run_pydeps(
     root_node_id: str,
     exclude: list[str] | None,
 ) -> dict | None:
-    """Run pydeps and return the JSON dict, or None on failure."""
-    pydeps_path = shutil.which("pydeps")
-    if not pydeps_path:
+    """Run pydeps programmatically and return the dep dict, or None on failure."""
+    try:
+        from pydeps import target as pydeps_target
+        from pydeps.configs import Config
+        from pydeps.py2depgraph import py2dep
+    except ImportError:
         logger.warning(
-            "pydeps not found (install with `pip install pydeps`). "
+            "pydeps not installed (install codezoom with the `python` extra). "
             "Falling back to file-based hierarchy."
         )
         return None
 
-    cmd: list[str] = [
-        pydeps_path,
-        str(src_dir),
-        "--show-deps",
-        "--no-show",
-        "--no-output",
-    ]
-    if exclude:
-        cmd.extend(["-xx"] + exclude)
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        cwd=str(project_dir),
+    config = Config(
+        fname=str(src_dir),
+        no_output=True,
+        no_show=True,
+        no_dot=True,
+        show_deps=False,
+        show_raw_deps=False,
+        show_dot=False,
+        exclude_exact=list(exclude) if exclude else [],
     )
-    if result.returncode != 0:
-        logger.warning("pydeps failed: %s", result.stderr)
-        return None
+    ctx = dict(iter(config))
 
     try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        logger.warning("pydeps JSON parse error: %s", e)
+        inp = pydeps_target.Target(str(src_dir))
+        with inp.chdir_work():
+            ctx["fname"] = inp.fname
+            ctx["isdir"] = inp.is_dir
+            dep_graph = py2dep(inp, **ctx)
+            return json.loads(dep_graph.__json__())
+    except Exception as e:
+        logger.warning("pydeps failed: %s", e)
         return None
 
 

@@ -33,7 +33,25 @@ class AstSymbolsExtractor:
 
             result = _extract_symbols(py_file)
             if result:
-                symbols, class_deps = result
+                symbols, class_deps, cross_module_refs = result
+
+                # Resolve cross-module refs to absolute module paths and merge
+                # into class_deps.  A cross-module target is stored as the
+                # dotted module ID (matching Java's convention for cross-package
+                # class→package edges).
+                if cross_module_refs:
+                    pkg = module_name.rsplit(".", 1)[0] if "." in module_name else ""
+                    for sym_name, xrefs in cross_module_refs.items():
+                        resolved: list[str] = []
+                        for _name, level, rel_module in xrefs:
+                            if level == 1 and pkg:
+                                abs_module = pkg + "." + rel_module
+                            else:
+                                abs_module = rel_module
+                            if abs_module not in resolved:
+                                resolved.append(abs_module)
+                        existing = class_deps.get(sym_name, [])
+                        class_deps[sym_name] = sorted(set(existing) | set(resolved))
 
                 # Ensure parent packages exist in hierarchy
                 _ensure_parents_exist(graph, module_name)
@@ -166,6 +184,12 @@ def _extract_reexports(init_file: Path, package_name: str, graph: ProjectGraph) 
 
     # Propagate class_deps: for each re-exported class that has deps in its
     # source module, keep only the deps that are also re-exported here.
+    # Cross-module targets (containing '.') are resolved to re-exported bare
+    # class names when the target module contributes symbols to this package.
+    reverse_import_map: dict[str, list[str]] = {}
+    for sym_name, mod in import_map.items():
+        reverse_import_map.setdefault(mod, []).append(sym_name)
+
     pkg_class_deps: dict[str, list[str]] = {}
     for name in sorted(all_names):
         source_module = import_map.get(name)
@@ -177,9 +201,20 @@ def _extract_reexports(init_file: Path, package_name: str, graph: ProjectGraph) 
         src_deps = source_node.class_deps.get(name)
         if not src_deps:
             continue
-        local_deps = [d for d in src_deps if d in all_names]
+        local_deps: list[str] = []
+        for d in src_deps:
+            if "." not in d:
+                # Same-module class name — keep if re-exported here
+                if d in all_names:
+                    local_deps.append(d)
+            else:
+                # Cross-module ref (e.g. "jgo.parse._coordinate") — resolve
+                # to re-exported class names from that module.
+                for sym in reverse_import_map.get(d, ()):
+                    if sym in all_names and sym != name:
+                        local_deps.append(sym)
         if local_deps:
-            pkg_class_deps[name] = local_deps
+            pkg_class_deps[name] = sorted(set(local_deps))
 
     if pkg_class_deps:
         if package_node.class_deps is None:
@@ -244,12 +279,23 @@ def _get_python_visibility(name: str) -> str:
 
 def _extract_symbols(
     file_path: Path,
-) -> tuple[dict[str, SymbolData], dict[str, list[str]]] | None:
-    """Return (symbols, class_deps) for top-level functions and classes in *file_path*.
+) -> (
+    tuple[
+        dict[str, SymbolData],
+        dict[str, list[str]],
+        dict[str, list[tuple[str, int, str]]],
+    ]
+    | None
+):
+    """Return (symbols, class_deps, cross_module_refs) for *file_path*.
 
     *class_deps* maps each class name to a sorted list of other top-level symbol
     names in the same module that it depends on — via method calls or class-body
     type annotations (e.g. dataclass field types).
+
+    *cross_module_refs* maps each class name to a list of ``(imported_name,
+    level, module)`` tuples for references to names imported via relative
+    imports.  The caller resolves these to absolute module paths.
     """
     try:
         with warnings.catch_warnings():
@@ -257,6 +303,17 @@ def _extract_symbols(
             tree = ast.parse(file_path.read_text())
     except (OSError, SyntaxError):
         return None
+
+    # Collect relative-import map: name -> (level, module)
+    # e.g. `from ._coordinate import Coordinate` -> {"Coordinate": (1, "_coordinate")}
+    import_sources: dict[str, tuple[int, str]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level and node.module:
+            for alias in node.names:
+                import_sources[alias.asname or alias.name] = (
+                    node.level,
+                    node.module,
+                )
 
     results: dict[str, SymbolData] = {}
     # Annotation names collected from class bodies (dataclass fields, etc.)
@@ -322,18 +379,28 @@ def _extract_symbols(
     if not results:
         return None
 
-    # Compute class_deps: for each class, union method calls and class-body
-    # annotation names, then filter to other top-level symbols in this module.
-    # This mirrors what jdeps provides for Java.
+    # Compute class_deps (same-module) and cross_module_refs (imported names).
     class_deps: dict[str, list[str]] = {}
+    cross_module_refs: dict[str, list[tuple[str, int, str]]] = {}
     for sym_name, sym in results.items():
         if sym.kind != "class":
             continue
         all_refs: set[str] = set(class_body_annotations.get(sym_name, ()))
         for method in sym.children.values():
             all_refs.update(method.calls)
+
+        # Same-module deps: names defined in this file
         deps = sorted(n for n in all_refs if n in results and n != sym_name)
         if deps:
             class_deps[sym_name] = deps
 
-    return results, class_deps
+        # Cross-module refs: names imported via relative imports
+        xrefs = sorted(
+            (n, *import_sources[n])
+            for n in all_refs
+            if n not in results and n != sym_name and n in import_sources
+        )
+        if xrefs:
+            cross_module_refs[sym_name] = xrefs
+
+    return results, class_deps, cross_module_refs

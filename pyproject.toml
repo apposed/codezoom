@@ -23,6 +23,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+python = [
+    "pydeps",
+]
 java = [
     "jgo>=2.0.0.dev0",
 ]

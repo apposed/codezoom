@@ -123,6 +123,9 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
     for module_name, info in deps.items():
         if module_name == "__main__":
             continue
+        # Only include project-internal modules (skip third-party deps).
+        if module_name != root_id and not module_name.startswith(root_id + "."):
+            continue
 
         parts = module_name.split(".")
 
@@ -134,11 +137,14 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
             hierarchy[child_name]  # ensure exists
             current = child_name
 
-        # Track module-level imports
+        # Track module-level imports (only to other project-internal modules).
         for imported in info.get("imports", []):
-            if imported != "__main__":
-                hierarchy[module_name]["imports_to"].add(imported)
-                hierarchy[imported]["imports_from"].add(module_name)
+            if imported == "__main__":
+                continue
+            if imported != root_id and not imported.startswith(root_id + "."):
+                continue
+            hierarchy[module_name]["imports_to"].add(imported)
+            hierarchy[imported]["imports_from"].add(module_name)
 
     # Aggregate imports bottom-up: process leaves first, then parents.
     # Build processing order via iterative post-order traversal.

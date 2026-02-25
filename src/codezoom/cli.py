@@ -6,6 +6,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from codezoom import __version__
 from codezoom.pipeline import run
 
 
@@ -36,6 +37,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         dest="open_browser",
         help="Open the generated HTML in a browser",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "-v",

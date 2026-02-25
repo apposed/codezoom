@@ -13,26 +13,31 @@ breadcrumb navigation to go back up.
 <th>Level</th>
 <th>Python</th>
 <th>Java</th>
+<th>Rust</th>
 </tr>
 <tr>
 <td><strong>1. External dependencies</strong></td>
 <td>Direct and transitive packages from <code>pyproject.toml</code> + <code>uv.lock</code></td>
 <td>Direct and transitive Maven dependencies from <code>pom.xml</code> (requires <code>jgo</code>)</td>
+<td>Direct and transitive crates via <code>cargo metadata</code></td>
 </tr>
 <tr>
 <td><strong>2. Package/module hierarchy</strong></td>
 <td>Sub-packages and modules via <a href="https://github.com/thebjorn/pydeps">pydeps</a> (with file-tree fallback) — includes inter-module imports</td>
 <td>Package tree via <code>jdeps</code> — includes inter-package dependencies and class-level call graphs</td>
+<td>Module tree via <code>rustdoc</code> JSON — includes inter-module import edges</td>
 </tr>
 <tr>
 <td><strong>3. Module/class internals</strong></td>
 <td>Functions and classes extracted from AST — shows visibility (public/private based on naming)</td>
 <td>Classes, interfaces, enums, and nested classes extracted from compiled bytecode via <code>javap</code> — shows visibility (public/protected/private/package)</td>
+<td>Structs, enums, traits, and functions extracted from rustdoc JSON — shows visibility (public/pub(crate)/private)</td>
 </tr>
 <tr>
 <td><strong>4. Class/method internals</strong></td>
 <td>Methods and their call relationships extracted from AST</td>
 <td>Methods with parameter signatures and call relationships extracted from bytecode</td>
+<td>Methods with call relationships extracted from source via tree-sitter (requires <code>codezoom[rust]</code>)</td>
 </tr>
 </table>
 
@@ -95,7 +100,7 @@ Not sure which to use? [Read this](https://jacobtomlinson.dev/posts/2025/python-
 
 ## Usage
 
-Basic usage (auto-detects Python or Java):
+Basic usage (auto-detects Python, Java, or Rust):
 
 ```bash
 codezoom /path/to/project                     # auto-detect, output to codezoom.html
@@ -110,8 +115,8 @@ codezoom /path/to/project --open              # open in browser after generating
 # Basic usage - requires pyproject.toml
 codezoom /path/to/python/project
 
-# For best results, install pydeps first
-pip install pydeps
+# For richer module analysis, install the python extra
+pip install codezoom[python]
 codezoom /path/to/python/project --open
 ```
 
@@ -130,6 +135,23 @@ pip install codezoom[java]
 codezoom . --open
 ```
 
+### Rust projects
+
+```bash
+# cargo metadata is used automatically if cargo is in PATH
+codezoom /path/to/rust/project
+
+# For call graph extraction, install the rust extra
+pip install codezoom[rust]
+codezoom /path/to/rust/project --open
+```
+
+Note: module hierarchy and symbol extraction require the Rust nightly toolchain:
+
+```bash
+rustup toolchain install nightly
+```
+
 Also works as a module:
 
 ```bash
@@ -146,7 +168,7 @@ python -m codezoom /path/to/project
 - Optional: [pydeps](https://github.com/thebjorn/pydeps) for richer module-level
   import analysis (falls back to file-tree scanning without it)
   ```bash
-  pip install pydeps
+  pip install codezoom[python]
   ```
 
 ### For Java projects
@@ -155,6 +177,17 @@ python -m codezoom /path/to/project
 - Optional: `jgo` for Maven dependency extraction
   ```bash
   pip install codezoom[java]
+  ```
+
+### For Rust projects
+- **cargo** — for dependency extraction via `cargo metadata`
+- **Rust nightly toolchain** — for module hierarchy and symbol extraction
+  ```bash
+  rustup toolchain install nightly
+  ```
+- Optional: tree-sitter for call graph extraction
+  ```bash
+  pip install codezoom[rust]
   ```
 
 ## Per-project configuration
@@ -195,6 +228,18 @@ hierarchy.
 - **Call graphs**: Method invocations extracted from bytecode
 - **Visibility**: Full Java visibility (public, protected, private, package-private)
 - **Limitations**: Bridge methods are filtered out; requires compiled `.class` files
+
+### Rust
+- **Detection**: Presence of `Cargo.toml`
+- **Prerequisites**:
+  - `cargo` installed (for dependency extraction)
+  - Rust nightly toolchain for module hierarchy and symbols: `rustup toolchain install nightly`
+  - `pip install codezoom[rust]` for call graph extraction
+- **Dependencies**: Crate dependencies via `cargo metadata` (direct + transitive, normal deps only)
+- **Hierarchy**: Module tree via `rustdoc` JSON — includes inter-module import edges
+- **Symbols**: Structs, enums, traits, and functions extracted from rustdoc JSON
+- **Call graphs**: Method invocations extracted from source via tree-sitter
+- **Visibility**: public, pub(crate)/pub(super), private
 
 ## License
 

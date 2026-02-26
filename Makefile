@@ -14,5 +14,8 @@ check:
 lint: check
 	bin/lint.sh
 
+test: check
+	bin/test.sh
+
 dist: check clean
 	bin/dist.sh

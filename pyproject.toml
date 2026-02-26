@@ -43,6 +43,7 @@ all = [
 [dependency-groups]
 dev = [
     "build",
+    "pytest",
     "ruff",
     "validate-pyproject[all]",
 ]

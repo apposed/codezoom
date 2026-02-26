@@ -204,6 +204,7 @@ def _extract_symbols_from_bytecode(
     current_class_line = None
     current_inherits = []
     current_methods = {}
+    in_class_header = False  # True from Classfile line until the class body "{" line
 
     current_method_name = None
     current_method_visibility = "package"
@@ -236,6 +237,7 @@ def _extract_symbols_from_bytecode(
             current_class_flags_pending = None
             current_inherits = []
             current_methods = {}
+            in_class_header = True
             current_method_name = None
             in_line_number_table = False
             continue
@@ -264,16 +266,24 @@ def _extract_symbols_from_bytecode(
                 current_inherits.append(super_class)
             continue
 
-        # Extract class-level flags for visibility
-        if (
-            not current_class_name
-            and not current_methods
-            and "flags:" in line
-            and current_classfile
-        ):
+        # The "{" at column 0 separates the class header from the class body.
+        # Everything before it (flags, this_class, super_class, constant pool) is
+        # the header; fields and methods come after it.
+        if line == "{":
+            in_class_header = False
+            continue
+
+        # Extract class-level flags for visibility (appears in header, before "{")
+        if in_class_header and "flags:" in line and current_classfile:
             fm = _FLAGS_RE.match(line)
             if fm:
-                current_class_flags_pending = fm.group(1)
+                if current_class_name:
+                    # Class name already resolved (e.g. from absolute Classfile path):
+                    # apply immediately — there may be no this_class: line (JDK 8).
+                    current_class_visibility = _visibility_from_flags(fm.group(1))
+                else:
+                    # Class name not yet known; store for this_class: to consume.
+                    current_class_flags_pending = fm.group(1)
             continue
 
         # Method declaration

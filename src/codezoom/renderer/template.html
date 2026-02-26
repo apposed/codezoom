@@ -2399,6 +2399,7 @@
                             hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                             visibility: info.visibility || null,
                             origin: info.origin || null,
+                            cycleGroup: cycleNodeMap.has(nodeFullId) ? cycleNodeMap.get(nodeFullId) : null,
                         }
                     });
                 });
@@ -2452,15 +2453,17 @@
                 let borderWidth = hasMethodsOrCalls ? 3 : 2;
                 const originShort = info.origin ? info.origin.split('.').pop() : null;
 
+                const nodeFullId = moduleId + ':' + name;
                 elements.push({
                     data: {
-                        id: moduleId + ':' + name,
+                        id: nodeFullId,
                         label: originShort ? name + '\n↗ ' + originShort : name,
                         nodeType: info.type === 'class' ? 'class' : 'function',
                         borderWidth: borderWidth,
                         hasChildren: info.type === 'class' && info.methods && Object.keys(info.methods).length > 0,
                         visibility: info.visibility || null,
                         origin: info.origin || null,
+                        cycleGroup: cycleNodeMap.has(nodeFullId) ? cycleNodeMap.get(nodeFullId) : null,
                     }
                 });
             });

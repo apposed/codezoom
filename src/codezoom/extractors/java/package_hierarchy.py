@@ -192,6 +192,10 @@ def _scan_class_deps(
     Unlike ``jdeps``, this reliably finds *all* class references in bytecode,
     including those in interface default methods.
     """
+    # Resolve to absolute paths so that relative_to() matches the absolute paths
+    # that javap emits on its "Classfile ..." header lines.
+    classes_dirs = [cd.resolve() for cd in classes_dirs]
+
     class_files: list[Path] = []
     for classes_dir in classes_dirs:
         class_files.extend(sorted(classes_dir.rglob("*.class")))

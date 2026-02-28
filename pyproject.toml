@@ -27,7 +27,7 @@ python = [
     "pydeps",
 ]
 java = [
-    "jgo>=2.0.0.dev0",
+    "jgo>=2.0.0",
 ]
 rust = [
     "tree-sitter>=0.24",
@@ -35,7 +35,7 @@ rust = [
 ]
 all = [
     "pydeps",
-    "jgo>=2.0.0.dev0",
+    "jgo>=2.0.0",
     "tree-sitter>=0.24",
     "tree-sitter-rust>=0.24",
 ]

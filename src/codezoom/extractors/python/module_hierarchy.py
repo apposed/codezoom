@@ -28,16 +28,30 @@ class ModuleHierarchyExtractor:
         return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
-        src_dir = _find_source_dir(project_dir, graph.root_node_ids[0])
-        if src_dir is None:
-            return
+        for root_node_id in graph.root_node_ids:
+            src_dir = _find_source_dir(project_dir, root_node_id)
+            if src_dir is not None:
+                self._extract_package(project_dir, graph, root_node_id, src_dir)
+            else:
+                # Multi-package project: root node has packages as children.
+                root_node = graph.hierarchy.get(root_node_id)
+                for pkg in root_node.children if root_node else []:
+                    pkg_dir = _find_source_dir(project_dir, pkg)
+                    if pkg_dir is not None:
+                        self._extract_package(project_dir, graph, pkg, pkg_dir)
 
-        deps = _run_pydeps(project_dir, src_dir, graph.root_node_ids[0], self._exclude)
+    def _extract_package(
+        self,
+        project_dir: Path,
+        graph: ProjectGraph,
+        pkg_name: str,
+        src_dir: Path,
+    ) -> None:
+        deps = _run_pydeps(project_dir, src_dir, pkg_name, self._exclude)
         if deps is None:
             # Fallback: build hierarchy from file tree only (no import edges)
-            deps = _build_deps_from_files(src_dir, graph.root_node_ids[0])
-
-        _build_hierarchical_data(deps, graph)
+            deps = _build_deps_from_files(src_dir, pkg_name)
+        _build_hierarchical_data(deps, graph, pkg_name)
 
 
 def _find_source_dir(project_dir: Path, root_node_id: str) -> Path | None:
@@ -111,9 +125,8 @@ def _build_deps_from_files(src_dir: Path, root_node_id: str) -> dict:
     return deps
 
 
-def _build_hierarchical_data(deps: dict, graph: ProjectGraph) -> None:
+def _build_hierarchical_data(deps: dict, graph: ProjectGraph, root_id: str) -> None:
     """Build the hierarchy inside *graph* from pydeps output."""
-    root_id = graph.root_node_ids[0]
 
     hierarchy: dict[str, dict[str, set]] = defaultdict(
         lambda: {"children": set(), "imports_from": set(), "imports_to": set()}

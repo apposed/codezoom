@@ -27,8 +27,7 @@ def _guess_project_name(project_dir: Path) -> str:
                     data = tomllib.load(f)
                 name = data.get("project", {}).get("name")
                 if name:
-                    # Normalise: PyPI allows hyphens but Python packages use underscores
-                    return name.replace("-", "_")
+                    return name
             except (OSError, tomllib.TOMLDecodeError, KeyError):
                 pass
 
@@ -75,7 +74,7 @@ def _guess_project_name(project_dir: Path) -> str:
         except (OSError, tomllib.TOMLDecodeError, KeyError):
             pass
 
-    return project_dir.name.replace("-", "_")
+    return project_dir.name
 
 
 def _guess_gradle_name(settings_path: Path) -> str | None:
@@ -117,34 +116,34 @@ def _guess_gradle_name_from_build(build_path: Path) -> str | None:
     return None
 
 
-def _find_package_name(project_dir: Path) -> str | None:
-    """Discover the actual importable package name.
+def _find_package_names(project_dir: Path) -> list[str]:
+    """Discover all importable package names for a Python project.
 
-    For Python projects the package name may differ from the project name
-    (e.g. project ``pyimagej`` provides package ``imagej``).  We look for a
-    directory containing an ``__init__.py`` under ``src/`` (src-layout) or
+    For Python projects the package name(s) may differ from the project name
+    (e.g. project ``pyimagej`` provides package ``imagej``).  We look for
+    directories containing an ``__init__.py`` under ``src/`` (src-layout) or
     directly under the project root (flat layout), skipping common
     non-package dirs.
 
-    For Java projects we return None — the hierarchy extractor computes
-    ``root_node_id`` from jdeps output.
+    Returns an empty list for non-Python projects (Java/Rust), whose
+    hierarchy extractors set ``root_node_ids`` themselves.
     """
     from codezoom.extractors.python import is_python_project
 
-    # Maven projects: root_node_id set by JavaPackageHierarchyExtractor.
+    # Maven projects: root_node_ids set by JavaPackageHierarchyExtractor.
     if (project_dir / "pom.xml").exists() and not is_python_project(project_dir):
-        return None
+        return []
 
-    # Gradle projects: root_node_id set by JavaPackageHierarchyExtractor.
+    # Gradle projects: root_node_ids set by JavaPackageHierarchyExtractor.
     if (
         (project_dir / "build.gradle.kts").exists()
         or (project_dir / "build.gradle").exists()
     ) and not is_python_project(project_dir):
-        return None
+        return []
 
     # Rust projects: root_node_ids set by RustModuleHierarchyExtractor.
     if (project_dir / "Cargo.toml").exists() and not is_python_project(project_dir):
-        return None
+        return []
 
     _SKIP = {
         ".git",
@@ -167,27 +166,23 @@ def _find_package_name(project_dir: Path) -> str | None:
         "examples",
     }
 
-    # src-layout: look for src/<pkg>/__init__.py
-    src = project_dir / "src"
-    if src.is_dir():
-        for child in sorted(src.iterdir()):
-            if (
-                child.is_dir()
-                and child.name not in _SKIP
-                and (child / "__init__.py").exists()
-            ):
-                return child.name
-
-    # flat layout: look for <pkg>/__init__.py at the project root
-    for child in sorted(project_dir.iterdir()):
-        if (
+    def _is_package(child: Path) -> bool:
+        return (
             child.is_dir()
             and child.name not in _SKIP
+            and not child.name.endswith(".egg-info")
             and (child / "__init__.py").exists()
-        ):
-            return child.name
+        )
 
-    return None
+    # src-layout: collect all src/<pkg> dirs with __init__.py
+    src = project_dir / "src"
+    if src.is_dir():
+        names = [child.name for child in sorted(src.iterdir()) if _is_package(child)]
+        if names:
+            return names
+
+    # flat layout: look for <pkg>/__init__.py at the project root
+    return [child.name for child in sorted(project_dir.iterdir()) if _is_package(child)]
 
 
 def run(
@@ -200,12 +195,28 @@ def run(
     """Run the full codezoom pipeline and return the output path."""
     project_dir = project_dir.resolve()
     project_name = name or _guess_project_name(project_dir)
-    root_node_id = _find_package_name(project_dir) or project_name
+    package_names = _find_package_names(project_dir)
 
-    graph = ProjectGraph(
-        project_name=project_name,
-        root_node_ids=[root_node_id],
-    )
+    if len(package_names) > 1:
+        # Multi-package project: use the project name as the single root node
+        # and wire the packages as its children so the dep graph stays connected
+        # to one top-level node.
+        from codezoom.model import NodeData
+
+        root_node_id = project_name
+        graph = ProjectGraph(
+            project_name=project_name,
+            root_node_ids=[root_node_id],
+        )
+        graph.hierarchy[root_node_id] = NodeData(children=list(package_names))
+    else:
+        # Single-package (or no package found): root node is the package itself,
+        # displayed with the project name label by the renderer.
+        root_node_id = package_names[0] if package_names else project_name
+        graph = ProjectGraph(
+            project_name=project_name,
+            root_node_ids=[root_node_id],
+        )
 
     logger.debug("Project: %s, root_node_ids: %s", project_name, graph.root_node_ids)
 

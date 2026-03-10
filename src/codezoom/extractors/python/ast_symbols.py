@@ -18,10 +18,19 @@ class AstSymbolsExtractor:
         return is_python_project(project_dir)
 
     def extract(self, project_dir: Path, graph: ProjectGraph) -> None:
-        src_dir = _find_source_dir(project_dir, graph.root_node_ids[0])
-        if src_dir is None:
-            return
+        for root_node_id in graph.root_node_ids:
+            src_dir = _find_source_dir(project_dir, root_node_id)
+            if src_dir is not None:
+                self._extract_package(src_dir, graph)
+            else:
+                # Multi-package project: root node has packages as children.
+                root_node = graph.hierarchy.get(root_node_id)
+                for pkg in root_node.children if root_node else []:
+                    pkg_dir = _find_source_dir(project_dir, pkg)
+                    if pkg_dir is not None:
+                        self._extract_package(pkg_dir, graph)
 
+    def _extract_package(self, src_dir: Path, graph: ProjectGraph) -> None:
         for py_file in src_dir.rglob("*.py"):
             if py_file.name == "__init__.py":
                 continue
@@ -93,11 +102,10 @@ def _find_source_dir(project_dir: Path, root_node_id: str) -> Path | None:
 def _ensure_parents_exist(graph: ProjectGraph, module_name: str) -> None:
     """Ensure all parent packages exist and children relationships are set up."""
     parts = module_name.split(".")
-    root_id = graph.root_node_ids[0]
 
     # Build intermediate package nodes
     for i in range(1, len(parts)):
-        parent_name = ".".join(parts[:i]) if i > 1 else root_id
+        parent_name = ".".join(parts[:i])
         child_name = ".".join(parts[: i + 1])
 
         # Ensure parent exists

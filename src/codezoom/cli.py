@@ -25,12 +25,18 @@ def main(argv: list[str] | None = None) -> None:
         "--output",
         type=Path,
         default=None,
-        help="Output HTML file path (default: codezoom.html)",
+        help="Output file path (default: codezoom.html, or codezoom.json with --json)",
     )
     parser.add_argument(
         "--name",
         default=None,
         help="Project display name (default: auto-detect from pyproject.toml)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output raw JSON data instead of an interactive HTML visualization",
     )
     parser.add_argument(
         "--open",
@@ -61,4 +67,5 @@ def main(argv: list[str] | None = None) -> None:
         output=args.output,
         name=args.name,
         open_browser=args.open_browser,
+        json_output=args.json_output,
     )

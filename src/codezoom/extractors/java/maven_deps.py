@@ -56,6 +56,46 @@ class JavaMavenDepsExtractor:
             _extract_single_module(project_dir, graph)
 
 
+def _dep_key(d) -> str:
+    return f"{d.groupId}:{d.artifactId}"
+
+
+def _build_dep_graph(
+    deps,
+    context,
+    known_names: set[str],
+    exclude_keys: set[str] | None = None,
+) -> dict[str, list[str]]:
+    """Build an adjacency list by reading each dep's own POM for declared direct deps.
+
+    Using the resolved tree would miss edges to deps that were already resolved at a
+    shallower depth (nearest-wins pruning), so we look up each dep's POM directly.
+    """
+    from jgo.maven import Model
+
+    dep_graph: dict[str, list[str]] = {}
+    for dep in deps:
+        parent_key = _dep_key(dep)
+        if exclude_keys and parent_key in exclude_keys:
+            continue
+        try:
+            dep_model = Model(dep.artifact.component.pom(), context)
+            declared, _ = dep_model.dependencies(max_depth=0)
+        except (OSError, ValueError, KeyError, RuntimeError) as e:
+            logger.debug("Could not load POM for %s: %s", parent_key, e)
+            continue
+        children = [
+            _dep_key(d)
+            for d in declared
+            if d.scope in (None, "compile", "runtime")
+            and _dep_key(d) in known_names
+            and (exclude_keys is None or _dep_key(d) not in exclude_keys)
+        ]
+        if children:
+            dep_graph[parent_key] = sorted(children)
+    return dep_graph
+
+
 def _extract_single_module(project_dir: Path, graph: ProjectGraph) -> None:
     """Extract deps from a single-module Maven project."""
     from jgo.maven import POM, MavenContext, Model
@@ -72,22 +112,20 @@ def _extract_single_module(project_dir: Path, graph: ProjectGraph) -> None:
         logger.warning("Could not parse pom.xml: %s", e)
         return
 
-    # Get direct dependencies (depth=1) for marking is_direct
+    # Get direct dependencies (depth=0 on the actual POM) for marking is_direct
     try:
-        direct_deps, _ = model.dependencies(max_depth=1)
+        direct_deps, _ = model.dependencies(max_depth=0)
     except (OSError, ValueError, KeyError) as e:
         logger.warning("Could not resolve direct deps: %s", e)
         direct_deps = []
 
     direct_keys = {
-        f"{d.groupId}:{d.artifactId}"
-        for d in direct_deps
-        if d.scope in (None, "compile", "runtime")
+        _dep_key(d) for d in direct_deps if d.scope in (None, "compile", "runtime")
     }
 
-    # Resolve full transitive tree
+    # Resolve full transitive closure
     try:
-        all_deps, tree = model.dependencies()
+        all_deps, _ = model.dependencies()
     except (OSError, ValueError, KeyError) as e:
         logger.warning("Could not resolve transitive deps: %s", e)
         # Fall back to direct-only
@@ -98,36 +136,9 @@ def _extract_single_module(project_dir: Path, graph: ProjectGraph) -> None:
 
     # Filter to compile/runtime scope
     filtered = [d for d in all_deps if d.scope in (None, "compile", "runtime")]
+    all_names = {_dep_key(d) for d in filtered}
 
-    # Build adjacency list from the DependencyNode tree
-    dep_graph: dict[str, list[str]] = {}
-
-    visited: set[int] = set()
-
-    def _walk_tree(node):
-        node_id = id(node)
-        if node_id in visited:
-            return
-        visited.add(node_id)
-        for child in node.children:
-            parent_key = f"{child.dep.groupId}:{child.dep.artifactId}"
-            if child.dep.scope not in (None, "compile", "runtime"):
-                continue
-            child_deps = []
-            for grandchild in child.children:
-                if grandchild.dep.scope in (None, "compile", "runtime"):
-                    gc_key = f"{grandchild.dep.groupId}:{grandchild.dep.artifactId}"
-                    child_deps.append(gc_key)
-            if child_deps:
-                dep_graph[parent_key] = child_deps
-            _walk_tree(child)
-
-    _walk_tree(tree)
-
-    # Build dep list
-    all_names: set[str] = set()
-    for d in filtered:
-        all_names.add(f"{d.groupId}:{d.artifactId}")
+    dep_graph = _build_dep_graph(filtered, context, all_names)
 
     graph.external_deps = [
         ExternalDep(name=n, is_direct=(n in direct_keys)) for n in sorted(all_names)
@@ -164,10 +175,10 @@ def _extract_multi_module(
         len(internal_coords),
     )
 
-    all_names: set[str] = set()
+    all_deps_by_key: dict[str, object] = {}  # key -> Dependency (last-seen wins)
     all_direct_keys: set[str] = set()
-    merged_dep_graph: dict[str, set[str]] = {}
     per_module_direct: dict[str, list[str]] = {}
+    last_context = None
 
     for module in modules:
         pom_path = project_dir / module / "pom.xml"
@@ -177,6 +188,7 @@ def _extract_multi_module(
         try:
             pom = POM(pom_path)
             context = MavenContext()
+            last_context = context
             model = Model(pom, context)
         except (OSError, ValueError, KeyError) as e:
             logger.debug("Could not parse %s/pom.xml: %s", module, e)
@@ -184,7 +196,7 @@ def _extract_multi_module(
 
         # Get direct dependencies
         try:
-            direct_deps, _ = model.dependencies(max_depth=1)
+            direct_deps, _ = model.dependencies(max_depth=0)
         except (OSError, ValueError, KeyError) as e:
             logger.debug("Could not resolve direct deps for %s: %s", module, e)
             direct_deps = []
@@ -192,61 +204,38 @@ def _extract_multi_module(
         module_direct: list[str] = []
         for d in direct_deps:
             if d.scope in (None, "compile", "runtime"):
-                key = f"{d.groupId}:{d.artifactId}"
+                key = _dep_key(d)
                 if key not in internal_coords:
                     all_direct_keys.add(key)
                     module_direct.append(key)
         if module_direct:
             per_module_direct[module] = sorted(module_direct)
 
-        # Resolve full transitive tree
+        # Resolve full transitive closure
         try:
-            deps, tree = model.dependencies()
+            deps, _ = model.dependencies()
         except (OSError, ValueError, KeyError) as e:
             logger.debug("Could not resolve transitive deps for %s: %s", module, e)
             continue
 
-        # Collect external dep names
+        # Collect external deps (preserve objects for graph building)
         for d in deps:
             if d.scope in (None, "compile", "runtime"):
-                key = f"{d.groupId}:{d.artifactId}"
+                key = _dep_key(d)
                 if key not in internal_coords:
-                    all_names.add(key)
+                    all_deps_by_key[key] = d
 
-        # Build adjacency from tree, filtering internal coords
-        visited: set[int] = set()
-
-        def _walk_tree(node):
-            node_id = id(node)
-            if node_id in visited:
-                return
-            visited.add(node_id)
-            for child in node.children:
-                parent_key = f"{child.dep.groupId}:{child.dep.artifactId}"
-                if child.dep.scope not in (None, "compile", "runtime"):
-                    continue
-                if parent_key in internal_coords:
-                    # Still walk children — they may have external transitive deps
-                    _walk_tree(child)
-                    continue
-                child_deps: list[str] = []
-                for grandchild in child.children:
-                    if grandchild.dep.scope in (None, "compile", "runtime"):
-                        gc_key = f"{grandchild.dep.groupId}:{grandchild.dep.artifactId}"
-                        if gc_key not in internal_coords:
-                            child_deps.append(gc_key)
-                if child_deps:
-                    if parent_key not in merged_dep_graph:
-                        merged_dep_graph[parent_key] = set()
-                    merged_dep_graph[parent_key].update(child_deps)
-                _walk_tree(child)
-
-        _walk_tree(tree)
+    all_names = set(all_deps_by_key.keys())
+    dep_graph: dict[str, list[str]] = {}
+    if last_context is not None:
+        dep_graph = _build_dep_graph(
+            all_deps_by_key.values(), last_context, all_names, internal_coords
+        )
 
     graph.external_deps = [
         ExternalDep(name=n, is_direct=(n in all_direct_keys)) for n in sorted(all_names)
     ]
-    graph.external_deps_graph = {k: sorted(v) for k, v in merged_dep_graph.items()}
+    graph.external_deps_graph = dep_graph
     graph.module_direct_deps = per_module_direct
     logger.debug(
         "Maven multi-module deps: %d total (%d direct), filtered %d internal coords",

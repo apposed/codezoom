@@ -10,6 +10,7 @@ from codezoom.analysis import find_class_cycles, find_cycles
 from codezoom.detect import detect_extractors
 from codezoom.model import ProjectGraph
 from codezoom.renderer.html import render_html
+from codezoom.renderer.json import render_json
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,7 @@ def run(
     output: Path | None = None,
     name: str | None = None,
     open_browser: bool = False,
+    json_output: bool = False,
 ) -> Path:
     """Run the full codezoom pipeline and return the output path."""
     project_dir = project_dir.resolve()
@@ -234,8 +236,12 @@ def run(
     graph.cycles = find_cycles(graph.hierarchy) + find_class_cycles(graph.hierarchy)
     logger.debug("Cycles detected: %d", len(graph.cycles))
 
-    out_path = output or (project_dir / "codezoom.html")
-    render_html(graph, out_path)
+    default_name = "codezoom.json" if json_output else "codezoom.html"
+    out_path = output or (project_dir / default_name)
+    if json_output:
+        render_json(graph, out_path)
+    else:
+        render_html(graph, out_path)
 
     logger.info("Generated %s", out_path)
 

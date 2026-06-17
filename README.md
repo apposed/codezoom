@@ -1,5 +1,9 @@
 # Codezoom
 
+[![License](https://img.shields.io/pypi/l/codezoom.svg)](https://github.com/apposed/codezoom/raw/main/UNLICENSE)
+[![PyPI](https://img.shields.io/pypi/v/codezoom.svg)](https://pypi.org/project/codezoom)
+[![Python Version](https://img.shields.io/pypi/pyversions/codezoom.svg)](https://python.org)
+
 Multi-level code structure explorer — interactive drill-down HTML visualizations.
 
 Codezoom generates a standalone HTML file that lets you explore a project's

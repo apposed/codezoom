@@ -417,7 +417,7 @@ def _resolve_dependency_jars(project_dir: Path, modules: list[str]) -> list[Path
             continue
         try:
             pom = POM(pom_path)
-            model = Model(pom, ctx)
+            model = Model(pom, ctx, lenient=True)
             deps, _ = model.dependencies()
         except (OSError, ValueError, KeyError, AttributeError) as e:
             logger.debug("Could not resolve deps for %s: %s", module, e)

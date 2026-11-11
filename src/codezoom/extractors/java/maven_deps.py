@@ -82,7 +82,7 @@ def _build_dep_graph(
         if exclude_keys and parent_key in exclude_keys:
             continue
         try:
-            dep_model = Model(dep.artifact.component.pom(), context)
+            dep_model = Model(dep.artifact.component.pom(), context, lenient=True)
             declared, _ = dep_model.dependencies(max_depth=0)
         except (OSError, ValueError, KeyError, RuntimeError) as e:
             logger.debug("Could not load POM for %s: %s", parent_key, e)
@@ -110,7 +110,7 @@ def _extract_single_module(project_dir: Path, graph: ProjectGraph) -> None:
     try:
         pom = POM(pom_path)
         context = MavenContext()
-        model = Model(pom, context)
+        model = Model(pom, context, lenient=True)
     except (OSError, ValueError, KeyError) as e:
         logger.warning("Could not parse pom.xml: %s", e)
         return
@@ -192,7 +192,7 @@ def _extract_multi_module(
             pom = POM(pom_path)
             context = MavenContext()
             last_context = context
-            model = Model(pom, context)
+            model = Model(pom, context, lenient=True)
         except (OSError, ValueError, KeyError) as e:
             logger.debug("Could not parse %s/pom.xml: %s", module, e)
             continue

@@ -28,6 +28,8 @@ def test_no_common_prefix_uses_project_root():
 
     assert graph.root_node_ids == ["proj"]
     assert graph.hierarchy["proj"].children == ["bdv", "ch", "sc"]
+    # The synthetic root contains every package, so it imports none of them.
+    assert graph.hierarchy["proj"].imports_to == []
     assert graph.hierarchy["bdv"].children == ["bdv.util"]
     assert graph.hierarchy["bdv"].imports_to == ["ch.epfl.biop"]
     assert graph.hierarchy["sc"].imports_to == ["bdv.util"]

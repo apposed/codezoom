@@ -70,6 +70,70 @@ def find_cycles(hierarchy: dict[str, NodeData]) -> list[list[str]]:
     return sccs
 
 
+def aggregate_imports(root_id: str, hierarchy: dict[str, dict[str, set]]) -> None:
+    """Aggregate imports bottom-up from leaves to parents.
+
+    *hierarchy* maps node IDs to ``children``, ``imports_to`` and
+    ``imports_from`` sets. Afterwards, each node's sets also include those of
+    its descendants, minus edges that stay within its own subtree.
+    """
+    # Post-order traversal: children before parents. Nodes are marked when
+    # first reached, so a malformed hierarchy with cycles cannot loop forever.
+    order: list[str] = []
+    reached = {root_id}
+    stack = [(root_id, iter(sorted(hierarchy[root_id]["children"])))]
+    while stack:
+        node_id, children = stack[-1]
+        child_id = next((c for c in children if c not in reached), None)
+        if child_id is None:
+            stack.pop()
+            order.append(node_id)
+        else:
+            reached.add(child_id)
+            stack.append((child_id, iter(sorted(hierarchy[child_id]["children"]))))
+
+    subtree: dict[str, set[str]] = {}
+    for node_id in order:
+        node = hierarchy[node_id]
+        within = {node_id}
+        all_to = set(node["imports_to"])
+        all_from = set(node["imports_from"])
+        for child_id in node["children"]:
+            within |= subtree.get(child_id, set())
+            all_to |= hierarchy[child_id]["imports_to"]
+            all_from |= hierarchy[child_id]["imports_from"]
+        subtree[node_id] = within
+        node["imports_to"] = all_to - within
+        node["imports_from"] = all_from - within
+
+
+def reaggregate_imports(
+    root_ids: list[str],
+    hierarchy: dict[str, NodeData],
+    members: set[str] | None = None,
+) -> None:
+    """Re-run :func:`aggregate_imports` over nodes already in a graph.
+
+    If *members* is given, only those nodes (and the roots) take part.
+    """
+    keep = set(hierarchy) if members is None else (members | set(root_ids))
+    raw = {
+        node_id: {
+            "children": {c for c in node.children if c in keep and c in hierarchy},
+            "imports_to": set(node.imports_to),
+            "imports_from": set(node.imports_from),
+        }
+        for node_id, node in hierarchy.items()
+        if node_id in keep
+    }
+    for root_id in root_ids:
+        if root_id in raw:
+            aggregate_imports(root_id, raw)
+    for node_id, entry in raw.items():
+        hierarchy[node_id].imports_to = sorted(entry["imports_to"])
+        hierarchy[node_id].imports_from = sorted(entry["imports_from"])
+
+
 def find_class_cycles(hierarchy: dict[str, NodeData]) -> list[list[str]]:
     """Return SCCs of size ≥ 2 at the class level using ``class_deps`` data.
 

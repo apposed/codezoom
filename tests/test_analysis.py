@@ -1,6 +1,6 @@
 """Tests for graph analysis (cycle detection)."""
 
-from codezoom.analysis import find_class_cycles, find_cycles
+from codezoom.analysis import aggregate_imports, find_class_cycles, find_cycles
 from codezoom.model import NodeData
 
 # ---------------------------------------------------------------------------
@@ -130,3 +130,47 @@ def test_find_cycles_long_chain():
     cycles = find_cycles(hierarchy)
     assert len(cycles) == 1
     assert len(cycles[0]) == n
+
+
+def _raw(children=(), imports_to=(), imports_from=()):
+    return {
+        "children": set(children),
+        "imports_to": set(imports_to),
+        "imports_from": set(imports_from),
+    }
+
+
+def test_aggregate_imports_rolls_up_and_drops_internal():
+    hierarchy = {
+        "pkg": _raw(["pkg.a", "pkg.b"]),
+        "pkg.a": _raw(["pkg.a.x"]),
+        "pkg.a.x": _raw(imports_to=["pkg.b", "pkg.a"]),
+        "pkg.b": _raw(imports_from=["pkg.a.x"]),
+    }
+    aggregate_imports("pkg", hierarchy)
+
+    assert hierarchy["pkg.a"]["imports_to"] == {"pkg.b"}
+    assert hierarchy["pkg"]["imports_to"] == set()
+    assert hierarchy["pkg"]["imports_from"] == set()
+
+
+def test_aggregate_imports_name_prefix_is_not_containment():
+    hierarchy = {
+        "pkg": _raw(["pkg.mod", "pkg.module"]),
+        "pkg.mod": _raw(imports_to=["pkg.module"]),
+        "pkg.module": _raw(imports_from=["pkg.mod"]),
+    }
+    aggregate_imports("pkg", hierarchy)
+
+    assert hierarchy["pkg.mod"]["imports_to"] == {"pkg.module"}
+
+
+def test_aggregate_imports_cyclic_children_terminates():
+    hierarchy = {
+        "a": _raw(["b"]),
+        "b": _raw(["a"], imports_to=["c"]),
+        "c": _raw(),
+    }
+    aggregate_imports("a", hierarchy)
+
+    assert hierarchy["a"]["imports_to"] == {"c"}

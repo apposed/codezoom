@@ -8,6 +8,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from codezoom.analysis import aggregate_imports
 from codezoom.extractors.python import is_python_project
 from codezoom.model import NodeData, ProjectGraph
 
@@ -160,36 +161,7 @@ def _build_hierarchical_data(deps: dict, graph: ProjectGraph, root_id: str) -> N
             hierarchy[imported]["imports_from"].add(module_name)
 
     # Aggregate imports bottom-up: process leaves first, then parents.
-    # Build processing order via iterative post-order traversal.
-    order: list[str] = []
-    stack = [root_id]
-    visited: set[str] = set()
-    while stack:
-        node_id = stack[-1]
-        children = hierarchy[node_id]["children"]
-        unvisited = [c for c in children if c not in visited]
-        if unvisited:
-            stack.extend(unvisited)
-        else:
-            stack.pop()
-            if node_id not in visited:
-                visited.add(node_id)
-                order.append(node_id)
-
-    for node_id in order:
-        node = hierarchy[node_id]
-        if not node["children"]:
-            node["imports_to"] = {
-                imp for imp in node["imports_to"] if not imp.startswith(node_id)
-            }
-        else:
-            all_to = set(node["imports_to"])
-            all_from = set(node["imports_from"])
-            for child_id in node["children"]:
-                all_to.update(hierarchy[child_id]["imports_to"])
-                all_from.update(hierarchy[child_id]["imports_from"])
-            node["imports_to"] = {imp for imp in all_to if not imp.startswith(node_id)}
-            node["imports_from"] = all_from
+    aggregate_imports(root_id, hierarchy)
 
     # Write into graph.hierarchy (preserving any existing symbols and is_exported data)
     for node_id, raw in hierarchy.items():

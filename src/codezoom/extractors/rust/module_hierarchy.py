@@ -9,6 +9,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+from codezoom.analysis import aggregate_imports, reaggregate_imports
 from codezoom.extractors.rust._rustdoc import get_rustdoc_json
 from codezoom.model import NodeData, ProjectGraph
 
@@ -126,7 +127,7 @@ def _build_crate_hierarchy(doc: dict, crate_name: str, graph: ProjectGraph) -> N
     _collect_use_edges(index, root_item, crate_name, hierarchy)
 
     # Aggregate imports bottom-up
-    _aggregate_imports(crate_name, hierarchy)
+    aggregate_imports(crate_name, hierarchy)
 
     # Write into graph.hierarchy
     crate_children: list[str] = []
@@ -345,7 +346,7 @@ def _add_source_import_edges(
 
     if edge_count:
         # Re-aggregate imports bottom-up for parent nodes
-        _reaggregate_imports(crate_name, graph, crate_modules)
+        reaggregate_imports([crate_name], graph.hierarchy, crate_modules)
 
     logger.debug(
         "Rust source imports for '%s': %d edges from %d files",
@@ -385,77 +386,6 @@ def _source_file_to_module_path(
         return crate_name
 
     return f"{crate_name}.{'.'.join(parts)}"
-
-
-def _reaggregate_imports(
-    crate_name: str, graph: ProjectGraph, crate_modules: set[str]
-) -> None:
-    """Re-aggregate imports bottom-up after adding source-level edges."""
-    order: list[str] = []
-    stack = [crate_name]
-    visited: set[str] = set()
-    while stack:
-        node_id = stack[-1]
-        node = graph.hierarchy.get(node_id)
-        children = node.children if node else []
-        unvisited = [c for c in children if c not in visited and c in crate_modules]
-        if unvisited:
-            stack.extend(unvisited)
-        else:
-            stack.pop()
-            if node_id not in visited:
-                visited.add(node_id)
-                order.append(node_id)
-
-    for node_id in order:
-        node = graph.hierarchy.get(node_id)
-        if node is None:
-            continue
-        if node.children:
-            all_to: set[str] = set(node.imports_to)
-            all_from: set[str] = set(node.imports_from)
-            for child_id in node.children:
-                child = graph.hierarchy.get(child_id)
-                if child:
-                    all_to.update(child.imports_to)
-                    all_from.update(child.imports_from)
-            node.imports_to = sorted(
-                imp for imp in all_to if not imp.startswith(f"{node_id}.")
-            )
-            node.imports_from = sorted(all_from)
-
-
-def _aggregate_imports(root_id: str, hierarchy: dict[str, dict[str, set]]) -> None:
-    """Aggregate imports bottom-up from leaves to parents."""
-    order: list[str] = []
-    stack = [root_id]
-    visited: set[str] = set()
-    while stack:
-        node_id = stack[-1]
-        children = hierarchy[node_id]["children"]
-        unvisited = [c for c in children if c not in visited]
-        if unvisited:
-            stack.extend(unvisited)
-        else:
-            stack.pop()
-            if node_id not in visited:
-                visited.add(node_id)
-                order.append(node_id)
-
-    for node_id in order:
-        node = hierarchy[node_id]
-        if not node["children"]:
-            node["imports_to"] = {
-                imp for imp in node["imports_to"] if not imp.startswith(node_id)
-            }
-        else:
-            all_to: set[str] = set(node["imports_to"])
-            all_from: set[str] = set(node["imports_from"])
-            for child_id in node["children"]:
-                all_to.update(hierarchy[child_id]["imports_to"])
-                all_from.update(hierarchy[child_id]["imports_from"])
-            node["imports_to"] = {imp for imp in all_to if not imp.startswith(node_id)}
-            node["imports_from"] = all_from
 
 
 def _compute_crate_level_imports(crate_names: list[str], graph: ProjectGraph) -> None:

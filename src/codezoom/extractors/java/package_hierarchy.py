@@ -706,7 +706,11 @@ def _build_hierarchical_data(
         else:
             break
 
-    root_id = ".".join(common) if common else sorted(all_packages)[0]
+    # Note: Without a common prefix, the top-level packages are grouped under
+    # a synthetic root named after the project. Using one of the packages as
+    # the root would make it both parent and child of its own top-level
+    # package, an infinite loop for the traversal below.
+    root_id = ".".join(common) if common else graph.project_name
     graph.root_node_ids = [root_id]
 
     # Build raw hierarchy data.

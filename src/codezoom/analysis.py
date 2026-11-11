@@ -19,31 +19,49 @@ def find_cycles(hierarchy: dict[str, NodeData]) -> list[list[str]]:
     sccs: list[list[str]] = []
     counter = [0]
 
-    def _visit(v: str) -> None:
-        index[v] = lowlink[v] = counter[0]
+    def _visit(root: str) -> None:
+        # Note: Iterative rather than recursive, so long dependency chains
+        # do not exceed Python's recursion limit.
+        index[root] = lowlink[root] = counter[0]
         counter[0] += 1
-        stack.append(v)
-        on_stack.add(v)
+        stack.append(root)
+        on_stack.add(root)
+        work = [(root, iter(hierarchy[root].imports_to))]
 
-        for w in hierarchy[v].imports_to:
-            if w not in hierarchy:
-                continue
-            if w not in index:
-                _visit(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in on_stack:
-                lowlink[v] = min(lowlink[v], index[w])
-
-        if lowlink[v] == index[v]:
-            scc: list[str] = []
-            while True:
-                w = stack.pop()
-                on_stack.discard(w)
-                scc.append(w)
-                if w == v:
+        while work:
+            v, targets = work[-1]
+            descended = False
+            for w in targets:
+                if w not in hierarchy:
+                    continue
+                if w not in index:
+                    index[w] = lowlink[w] = counter[0]
+                    counter[0] += 1
+                    stack.append(w)
+                    on_stack.add(w)
+                    work.append((w, iter(hierarchy[w].imports_to)))
+                    descended = True
                     break
-            if len(scc) >= 2:
-                sccs.append(scc)
+                if w in on_stack:
+                    lowlink[v] = min(lowlink[v], index[w])
+            if descended:
+                continue
+
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                lowlink[parent] = min(lowlink[parent], lowlink[v])
+
+            if lowlink[v] == index[v]:
+                scc: list[str] = []
+                while True:
+                    w = stack.pop()
+                    on_stack.discard(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                if len(scc) >= 2:
+                    sccs.append(scc)
 
     for v in hierarchy:
         if v not in index:

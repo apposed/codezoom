@@ -122,3 +122,11 @@ def test_find_class_cycles_independent_cycles_across_packages():
     groups = {frozenset(c) for c in cycles}
     assert frozenset({"pkg.a:X", "pkg.a:Y"}) in groups
     assert frozenset({"pkg.b:P", "pkg.b:Q"}) in groups
+
+
+def test_find_cycles_long_chain():
+    n = 5000
+    hierarchy = {f"n{i}": NodeData(imports_to=[f"n{(i + 1) % n}"]) for i in range(n)}
+    cycles = find_cycles(hierarchy)
+    assert len(cycles) == 1
+    assert len(cycles[0]) == n

@@ -156,6 +156,16 @@ Note: module hierarchy and symbol extraction require the Rust nightly toolchain:
 rustup toolchain install nightly
 ```
 
+### Graphviz DOT files
+
+```bash
+# Visualize any DOT graph; output defaults to deps.html beside the input
+codezoom deps.dot --open
+```
+
+Clusters (`subgraph cluster_*`) become drill-down levels, and node and cluster
+labels are used as display names.
+
 Also works as a module:
 
 ```bash
@@ -193,6 +203,9 @@ python -m codezoom /path/to/project
   ```bash
   pip install codezoom[rust]
   ```
+
+### For DOT files
+- **Graphviz** — its `gvpr` tool parses the DOT file
 
 ## Per-project configuration
 

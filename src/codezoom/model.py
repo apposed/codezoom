@@ -31,6 +31,7 @@ class NodeData:
     is_exported: bool = (
         True  # For Java: whether package is exported in module-info.java
     )
+    label: str | None = None  # Display name, if not derived from the node ID
 
 
 @dataclass

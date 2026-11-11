@@ -37,6 +37,8 @@ def graph_to_dict(graph: ProjectGraph) -> dict:
             entry["class_deps"] = node.class_deps
         if not node.is_exported:
             entry["is_exported"] = False
+        if node.label is not None:
+            entry["label"] = node.label
         hierarchy[node_id] = entry
         if node.symbols:
             function_data[node_id] = {

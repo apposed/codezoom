@@ -18,7 +18,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "project_dir",
         type=Path,
-        help="Path to the project to visualize",
+        help="Path to the project to visualize, or a Graphviz .dot/.gv file",
     )
     parser.add_argument(
         "-o",

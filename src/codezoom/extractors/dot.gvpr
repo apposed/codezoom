@@ -1,0 +1,48 @@
+// Emit the structure of a Graphviz graph for codezoom's DOT extractor.
+//
+// Records are separated by \036 (RS) and fields by \037 (US), so that
+// names and labels need no escaping. Record types:
+//
+//   G  graph-name  is-directed  label
+//   S  subgraph-name  parent-name  label  label-is-html  cluster-attr
+//   M  subgraph-name  node-name     (one per node in the subgraph, nested too)
+//   N  node-name  label  label-is-html
+//   E  tail-name  head-name
+
+BEG_G {
+  graph_t queue[int];
+  graph_t g;
+  graph_t sg;
+  node_t v;
+  string lbl;
+  string clu;
+  int qhead = 0;
+  int qtail = 0;
+
+  lbl = hasAttr($G, "label") ? aget($G, "label") : "";
+  printf("G\037%s\037%d\037%s\036", $G.name, isDirect($G), lbl);
+
+  // Breadth-first walk over all subgraphs, nested ones included.
+  queue[qtail++] = $G;
+  while (qhead < qtail) {
+    g = queue[qhead++];
+    for (sg = fstsubg(g); sg; sg = nxtsubg(sg)) {
+      lbl = hasAttr(sg, "label") ? aget(sg, "label") : "";
+      clu = hasAttr(sg, "cluster") ? aget(sg, "cluster") : "";
+      printf("S\037%s\037%s\037%s\037%d\037%s\036", sg.name, g.name, lbl, hasAttr(sg, "label") && ishtml(aget(sg, "label")), clu);
+      for (v = fstnode(sg); v; v = nxtnode_sg(sg, v)) {
+        printf("M\037%s\037%s\036", sg.name, v.name);
+      }
+      queue[qtail++] = sg;
+    }
+  }
+}
+
+N {
+  lbl = hasAttr($, "label") ? aget($, "label") : "";
+  printf("N\037%s\037%s\037%d\036", $.name, lbl, hasAttr($, "label") && ishtml(aget($, "label")));
+}
+
+E {
+  printf("E\037%s\037%s\036", $.tail.name, $.head.name);
+}

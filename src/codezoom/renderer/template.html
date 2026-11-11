@@ -2211,7 +2211,7 @@
                             elements.push({
                                 data: {
                                     id: rootId,
-                                    label: rootId,
+                                    label: (rootNode && rootNode.label) || rootId,
                                     nodeType: 'root',
                                     borderWidth: 3,
                                     isClickable: isClickable,
@@ -2295,7 +2295,7 @@
                     elements.push({
                         data: {
                             id: childId,
-                            label: childId.split('.').pop(),
+                            label: (childNode && childNode.label) || childId.split('.').pop(),
                             nodeType: isClickable ? 'clickable' : 'regular',
                             borderWidth: isClickable ? 3 : 2,
                             visibility: isPrivate ? 'private' : null,
@@ -2883,7 +2883,7 @@
                         separator = '.';
                     } else {
                         // First level or different branch
-                        label = nodeId;
+                        label = (hierarchy[nodeId] && hierarchy[nodeId].label) || nodeId;
                         separator = ' &rsaquo; ';
                     }
                 }

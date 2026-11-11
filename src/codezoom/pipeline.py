@@ -186,6 +186,60 @@ def _find_package_names(project_dir: Path) -> list[str]:
     return [child.name for child in sorted(project_dir.iterdir()) if _is_package(child)]
 
 
+def _write_output(
+    graph: ProjectGraph,
+    out_path: Path,
+    *,
+    open_browser: bool,
+    json_output: bool,
+) -> Path:
+    """Render *graph* to *out_path*, optionally opening it in a browser."""
+    if json_output:
+        render_json(graph, out_path)
+    else:
+        render_html(graph, out_path)
+
+    logger.info("Generated %s", out_path)
+
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(out_path.as_uri())
+
+    return out_path
+
+
+def _run_dot_file(
+    dot_path: Path,
+    *,
+    output: Path | None = None,
+    name: str | None = None,
+    open_browser: bool = False,
+    json_output: bool = False,
+) -> Path:
+    """Run the pipeline for a single Graphviz DOT/GV file."""
+    from codezoom.extractors.dot import DotError, extract_dot_file
+
+    graph = ProjectGraph(project_name=name or dot_path.stem)
+
+    try:
+        directed = extract_dot_file(dot_path, graph)
+    except DotError as e:
+        logger.error("%s", e)
+        sys.exit(1)
+
+    # Note: Cycles are meaningless when edges have no direction.
+    if directed:
+        graph.cycles = find_cycles(graph.hierarchy)
+        logger.debug("Cycles detected: %d", len(graph.cycles))
+
+    suffix = ".json" if json_output else ".html"
+    out_path = output or dot_path.with_suffix(suffix)
+    return _write_output(
+        graph, out_path, open_browser=open_browser, json_output=json_output
+    )
+
+
 def run(
     project_dir: Path,
     *,
@@ -196,6 +250,16 @@ def run(
 ) -> Path:
     """Run the full codezoom pipeline and return the output path."""
     project_dir = project_dir.resolve()
+
+    # Graphviz DOT/GV file — skip project detection, go straight to DOT extractor
+    if project_dir.is_file() and project_dir.suffix.lower() in (".dot", ".gv"):
+        return _run_dot_file(
+            project_dir,
+            output=output,
+            name=name,
+            open_browser=open_browser,
+            json_output=json_output,
+        )
     project_name = name or _guess_project_name(project_dir)
     package_names = _find_package_names(project_dir)
 
@@ -238,16 +302,6 @@ def run(
 
     default_name = "codezoom.json" if json_output else "codezoom.html"
     out_path = output or (project_dir / default_name)
-    if json_output:
-        render_json(graph, out_path)
-    else:
-        render_html(graph, out_path)
-
-    logger.info("Generated %s", out_path)
-
-    if open_browser:
-        import webbrowser
-
-        webbrowser.open(out_path.as_uri())
-
-    return out_path
+    return _write_output(
+        graph, out_path, open_browser=open_browser, json_output=json_output
+    )

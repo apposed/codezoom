@@ -127,15 +127,7 @@ def _walk_module_symbols(
                 visibility=vis,
             )
 
-        elif "struct" in item_inner:
-            module_symbols[name] = SymbolData(
-                name=name,
-                kind="class",
-                line=_get_line(item),
-                visibility=vis,
-            )
-
-        elif "enum" in item_inner:
+        elif "struct" in item_inner or "enum" in item_inner:
             module_symbols[name] = SymbolData(
                 name=name,
                 kind="class",

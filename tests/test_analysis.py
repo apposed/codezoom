@@ -96,7 +96,7 @@ def test_find_class_cycles_cross_package_ignored():
 
 
 def test_find_class_cycles_three_way():
-    h = _class_hierarchy(**{"pkg": {"A": ["B"], "B": ["C"], "C": ["A"]}})
+    h = _class_hierarchy(pkg={"A": ["B"], "B": ["C"], "C": ["A"]})
     (cycle,) = find_class_cycles(h)
     assert set(cycle) == {"pkg:A", "pkg:B", "pkg:C"}
 

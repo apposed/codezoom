@@ -9,9 +9,9 @@ from codezoom.extractors.rust.cargo_deps import RustCargoDepsExtractor
 from codezoom.extractors.rust.module_hierarchy import RustModuleHierarchyExtractor
 
 __all__ = [
+    "RustAstSymbolsExtractor",
     "RustCargoDepsExtractor",
     "RustModuleHierarchyExtractor",
-    "RustAstSymbolsExtractor",
     "is_rust_project",
 ]
 

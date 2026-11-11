@@ -799,6 +799,23 @@
         const TOP_LEVEL = '__codezoom_top__';
         let expandedNodes = new Set(); // IDs of package nodes expanded as compound containers
 
+        // Parent of each hierarchy node, for resolving an import target to its
+        // ancestor among the nodes currently displayed.
+        const parentOf = {};
+        Object.entries(hierarchy).forEach(([id, node]) => {
+            (node.children || []).forEach(childId => { parentOf[childId] = id; });
+        });
+
+        function resolveToDisplayed(targetId, displayed) {
+            const seen = new Set();
+            let current = targetId;
+            while (current !== undefined && !displayed.has(current) && !seen.has(current)) {
+                seen.add(current);
+                current = parentOf[current];
+            }
+            return displayed.has(current) ? current : null;
+        }
+
         // Cycle detection data: map nodeId -> cycle group index (0-based)
         const cycles = data.cycles || [];
         const cycleNodeMap = new Map();
@@ -2203,6 +2220,7 @@
 
                     if (isMultiTop) {
                         // Multi-root: each root is a top-level node
+                        const rootIdSet = new Set(ROOT_IDS);
                         ROOT_IDS.forEach(rootId => {
                             const rootNode = hierarchy[rootId];
                             const hasChildren = rootNode && rootNode.children && rootNode.children.length > 0;
@@ -2221,8 +2239,9 @@
 
                             // Inter-module edges
                             if (rootNode) {
-                                (rootNode.imports_to || []).forEach(targetId => {
-                                    if (ROOT_IDS.includes(targetId)) {
+                                (rootNode.imports_to || []).forEach(importId => {
+                                    const targetId = resolveToDisplayed(importId, rootIdSet);
+                                    if (targetId && targetId !== rootId) {
                                         const edgeId = rootId + '->' + targetId;
                                         if (!seenEdges.has(edgeId)) {
                                             elements.push({ data: { id: edgeId, source: rootId, target: targetId } });
@@ -2370,8 +2389,9 @@
                 children.forEach(childId => {
                     const childNode = hierarchy[childId];
                     if (childNode && childNode.imports_to) {
-                        childNode.imports_to.forEach(targetId => {
-                            if (childSet.has(targetId) && childId !== targetId) {
+                        childNode.imports_to.forEach(importId => {
+                            const targetId = resolveToDisplayed(importId, childSet);
+                            if (targetId && childId !== targetId) {
                                 const edgeId = childId + '->' + targetId;
                                 if (!elements.find(el => el.data.id === edgeId)) {
                                     elements.push({ data: { id: edgeId, source: childId, target: targetId, type: 'import', weight: computeModuleEdgeWeight(childId, targetId) } });

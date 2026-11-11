@@ -41,9 +41,12 @@ class JavaMavenDepsExtractor:
         try:
             from jgo.maven import POM, MavenContext, Model  # noqa: F401
         except ImportError:
+            from codezoom._install import install_hint
+
             logger.warning(
                 "jgo not installed — skipping Maven dependency extraction. "
-                "Install with: pip install codezoom[java]"
+                "Install with: %s",
+                install_hint("java"),
             )
             return
 

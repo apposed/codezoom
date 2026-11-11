@@ -80,9 +80,12 @@ def _run_pydeps(
         from pydeps.configs import Config
         from pydeps.py2depgraph import py2dep
     except ImportError:
+        from codezoom._install import install_hint
+
         logger.warning(
-            "pydeps not installed (install codezoom with the `python` extra). "
-            "Falling back to file-based hierarchy."
+            "pydeps not installed — falling back to file-based hierarchy. "
+            "Install with: %s",
+            install_hint("python"),
         )
         return None
 

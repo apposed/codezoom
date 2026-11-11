@@ -120,7 +120,7 @@ codezoom /path/to/project --open              # open in browser after generating
 codezoom /path/to/python/project
 
 # For richer module analysis, install the python extra
-pip install codezoom[python]
+pip install 'codezoom[python]'
 codezoom /path/to/python/project --open
 ```
 
@@ -135,7 +135,7 @@ mvn compile
 codezoom . --open
 
 # For full dependency analysis, install jgo
-pip install codezoom[java]
+pip install 'codezoom[java]'
 codezoom . --open
 ```
 
@@ -146,7 +146,7 @@ codezoom . --open
 codezoom /path/to/rust/project
 
 # For call graph extraction, install the rust extra
-pip install codezoom[rust]
+pip install 'codezoom[rust]'
 codezoom /path/to/rust/project --open
 ```
 
@@ -182,7 +182,7 @@ python -m codezoom /path/to/project
 - Optional: [pydeps](https://github.com/thebjorn/pydeps) for richer module-level
   import analysis (falls back to file-tree scanning without it)
   ```bash
-  pip install codezoom[python]
+  pip install 'codezoom[python]'
   ```
 
 ### For Java projects
@@ -190,7 +190,7 @@ python -m codezoom /path/to/project
 - **Compiled code** — run `mvn compile` before analyzing
 - Optional: `jgo` for Maven dependency extraction
   ```bash
-  pip install codezoom[java]
+  pip install 'codezoom[java]'
   ```
 
 ### For Rust projects
@@ -201,7 +201,7 @@ python -m codezoom /path/to/project
   ```
 - Optional: tree-sitter for call graph extraction
   ```bash
-  pip install codezoom[rust]
+  pip install 'codezoom[rust]'
   ```
 
 ### For DOT files
@@ -237,7 +237,7 @@ hierarchy.
 - **Prerequisites**:
   - JDK installed (for `jdeps` and `javap`)
   - Project compiled (`mvn compile` or `./gradlew build`)
-  - `pip install codezoom[java]` for dependency extraction
+  - `pip install 'codezoom[java]'` for dependency extraction
 - **Dependencies**: Maven dependencies via `jgo` (direct + transitive with scope filtering)
 - **Hierarchy**: Package tree via `jdeps` with inter-package dependencies
 - **Class dependencies**: Class-to-class and class-to-package relationships via `javap`
@@ -251,7 +251,7 @@ hierarchy.
 - **Prerequisites**:
   - `cargo` installed (for dependency extraction)
   - Rust nightly toolchain for module hierarchy and symbols: `rustup toolchain install nightly`
-  - `pip install codezoom[rust]` for call graph extraction
+  - `pip install 'codezoom[rust]'` for call graph extraction
 - **Dependencies**: Crate dependencies via `cargo metadata` (direct + transitive, normal deps only)
 - **Hierarchy**: Module tree via `rustdoc` JSON — includes inter-module import edges
 - **Symbols**: Structs, enums, traits, and functions extracted from rustdoc JSON

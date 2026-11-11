@@ -72,6 +72,7 @@ def _discover_workspace_crates(
         result = subprocess.run(
             ["cargo", "metadata", "--format-version", "1", "--no-deps"],
             capture_output=True,
+            check=False,
             text=True,
             cwd=str(project_dir),
             timeout=30,
@@ -326,23 +327,23 @@ def _add_source_import_edges(
                     target_module = candidate
                     break
 
-            if target_module and target_module != source_module:
-                # Don't add edges to self or to ancestor/descendant
-                if not source_module.startswith(
-                    f"{target_module}."
-                ) and not target_module.startswith(f"{source_module}."):
-                    node = graph.hierarchy.get(source_module)
-                    tgt_node = graph.hierarchy.get(target_module)
-                    if node and tgt_node:
-                        if target_module not in node.imports_to:
-                            node.imports_to = sorted(
-                                set(node.imports_to) | {target_module}
-                            )
-                        if source_module not in tgt_node.imports_from:
-                            tgt_node.imports_from = sorted(
-                                set(tgt_node.imports_from) | {source_module}
-                            )
-                        edge_count += 1
+            # Don't add edges to self or to ancestor/descendant
+            if (
+                target_module
+                and target_module != source_module
+                and not source_module.startswith(f"{target_module}.")
+                and not target_module.startswith(f"{source_module}.")
+            ):
+                node = graph.hierarchy.get(source_module)
+                tgt_node = graph.hierarchy.get(target_module)
+                if node and tgt_node:
+                    if target_module not in node.imports_to:
+                        node.imports_to = sorted(set(node.imports_to) | {target_module})
+                    if source_module not in tgt_node.imports_from:
+                        tgt_node.imports_from = sorted(
+                            set(tgt_node.imports_from) | {source_module}
+                        )
+                    edge_count += 1
 
     if edge_count:
         # Re-aggregate imports bottom-up for parent nodes

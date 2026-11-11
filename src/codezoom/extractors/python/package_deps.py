@@ -122,13 +122,13 @@ def _extract_pixi_direct_deps(project_root: Path) -> list[str]:
     _collect_keys(data.get("pypi-dependencies"))
 
     # [feature.*.dependencies] and [feature.*.pypi-dependencies]
-    for _feat_name, feat in data.get("feature", {}).items():
+    for feat in data.get("feature", {}).values():
         if isinstance(feat, dict):
             _collect_keys(feat.get("dependencies"))
             _collect_keys(feat.get("pypi-dependencies"))
 
     # [target.*.dependencies] and [target.*.pypi-dependencies]
-    for _tgt_name, tgt in data.get("target", {}).items():
+    for tgt in data.get("target", {}).values():
         if isinstance(tgt, dict):
             _collect_keys(tgt.get("dependencies"))
             _collect_keys(tgt.get("pypi-dependencies"))
@@ -232,6 +232,7 @@ def _generate_pixi_lock(project_root: Path) -> None:
         result = subprocess.run(
             ["pixi", "--version"],
             capture_output=True,
+            check=False,
             text=True,
             timeout=5,
         )
@@ -244,6 +245,7 @@ def _generate_pixi_lock(project_root: Path) -> None:
             ["pixi", "lock"],
             cwd=project_root,
             capture_output=True,
+            check=False,
             text=True,
             timeout=300,
         )
@@ -254,10 +256,8 @@ def _generate_pixi_lock(project_root: Path) -> None:
                 "Failed to generate pixi.lock: %s",
                 result.stderr.strip() if result.stderr else "unknown error",
             )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         logger.warning("Could not generate pixi.lock: %s", e)
-    except Exception as e:
-        logger.warning("Unexpected error generating pixi.lock: %s", e)
 
 
 def _extract_pixi_dependencies(
@@ -360,6 +360,7 @@ def _generate_uv_lock(project_root: Path) -> None:
         result = subprocess.run(
             ["uv", "--version"],
             capture_output=True,
+            check=False,
             text=True,
             timeout=5,
         )
@@ -372,6 +373,7 @@ def _generate_uv_lock(project_root: Path) -> None:
             ["uv", "lock"],
             cwd=project_root,
             capture_output=True,
+            check=False,
             text=True,
             timeout=300,  # 5 minutes should be enough
         )
@@ -382,7 +384,5 @@ def _generate_uv_lock(project_root: Path) -> None:
                 "Failed to generate uv.lock: %s",
                 result.stderr.strip() if result.stderr else "unknown error",
             )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         logger.warning("Could not generate uv.lock: %s", e)
-    except Exception as e:
-        logger.warning("Unexpected error generating uv.lock: %s", e)

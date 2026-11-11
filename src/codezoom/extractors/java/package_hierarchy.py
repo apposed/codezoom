@@ -141,6 +141,7 @@ def _run_jdeps(
         result = subprocess.run(
             [jdeps_path, *mp_args, "-verbose:package", str(classes_dir)],
             capture_output=True,
+            check=False,
             text=True,
         )
         if result.returncode != 0:
@@ -217,6 +218,7 @@ def _scan_class_deps(
     result = subprocess.run(
         [javap_path, "-v", *(str(f) for f in class_files)],
         capture_output=True,
+        check=False,
         text=True,
     )
     if result.returncode != 0:
@@ -430,7 +432,7 @@ def _resolve_dependency_jars(project_dir: Path, modules: list[str]) -> list[Path
                 jar = dep.artifact.resolve()
                 if jar.exists():
                     jar_paths.add(jar)
-            except Exception as e:
+            except (OSError, ValueError, KeyError, RuntimeError) as e:
                 logger.debug(
                     "Could not resolve artifact %s:%s: %s",
                     dep.groupId,
@@ -523,7 +525,7 @@ def _build_multi_module_hierarchy(
             else:
                 break
 
-        module_root_pkg = ".".join(common) if common else sorted(module_packages)[0]
+        module_root_pkg = ".".join(common) if common else min(module_packages)
 
         # Build hierarchy for this module's packages.
         hierarchy: dict[str, dict[str, set]] = defaultdict(
@@ -556,9 +558,9 @@ def _build_multi_module_hierarchy(
             if (
                 pkg_to_module.get(tgt) == module_name
                 and pkg_to_module.get(src) != module_name
+                and tgt in hierarchy
             ):
-                if tgt in hierarchy:
-                    hierarchy[tgt]["imports_from"].add(src)
+                hierarchy[tgt]["imports_from"].add(src)
 
         # Aggregate imports bottom-up within this module.
         aggregate_imports(module_root_pkg, hierarchy)

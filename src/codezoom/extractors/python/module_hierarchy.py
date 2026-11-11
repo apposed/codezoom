@@ -110,7 +110,9 @@ def _run_pydeps(
             ctx["isdir"] = inp.is_dir
             dep_graph = py2dep(inp, **ctx)
             return json.loads(dep_graph.__json__())
-    except Exception as e:
+    # Note: pydeps analyzes arbitrary project code and can fail in many ways;
+    # any failure just means falling back to the file-based hierarchy.
+    except Exception as e:  # noqa: BLE001
         logger.warning("pydeps failed: %s", e)
         return None
 

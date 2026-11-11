@@ -141,6 +141,7 @@ def _run_cargo_metadata(project_dir: Path) -> dict | None:
         result = subprocess.run(
             ["cargo", "metadata", "--format-version", "1"],
             capture_output=True,
+            check=False,
             text=True,
             cwd=str(project_dir),
             timeout=60,

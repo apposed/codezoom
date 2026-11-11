@@ -61,6 +61,7 @@ def _check_nightly(project_dir: Path) -> bool:
         result = subprocess.run(
             [rustup, "run", "nightly", "rustc", "--version"],
             capture_output=True,
+            check=False,
             text=True,
             timeout=10,
         )
@@ -110,6 +111,7 @@ def _generate_rustdoc_json(
         result = subprocess.run(
             cmd,
             capture_output=True,
+            check=False,
             text=True,
             cwd=str(project_dir),
             timeout=300,

@@ -196,7 +196,7 @@ def _attach_impl_methods(
         module_path = ".".join(path_parts[:-1])
         type_locations[type_id] = (module_path, type_name)
 
-    for item_id, item in index.items():
+    for item in index.values():
         item_inner = item.get("inner", {})
         if not isinstance(item_inner, dict) or "impl" not in item_inner:
             continue
@@ -254,9 +254,12 @@ def _attach_impl_methods(
                 "IntoEither",
                 "StructuralPartialEq",
             }
-            if trait_name and trait_name not in _SKIP_TRAITS:
-                if trait_name not in type_symbol.inherits:
-                    type_symbol.inherits.append(trait_name)
+            if (
+                trait_name
+                and trait_name not in _SKIP_TRAITS
+                and trait_name not in type_symbol.inherits
+            ):
+                type_symbol.inherits.append(trait_name)
 
         # Collect methods from this impl (only inherent impls, not trait impls)
         if not trait_info:

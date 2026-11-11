@@ -126,6 +126,7 @@ class GradleDepsExtractor:
                     cmd,
                     cwd=project_dir,
                     capture_output=True,
+                    check=False,
                     text=True,
                     timeout=120,
                 )

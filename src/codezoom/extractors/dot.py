@@ -79,8 +79,8 @@ def extract_dot_file(dot_path: Path, graph: ProjectGraph) -> bool:
     for name, sg in clusters.items():
         parent = cluster_parent(sg)
         parents[cluster_ids[name]] = cluster_ids[parent] if parent else None
-    for cid in parents:
-        d, p = 0, parents[cid]
+    for cid, parent in parents.items():
+        d, p = 0, parent
         while p is not None:
             d, p = d + 1, parents[p]
         depth[cid] = d
@@ -145,6 +145,7 @@ def _run_gvpr(dot_path: Path) -> _DotGraph:
         result = subprocess.run(
             [gvpr, "-f", str(_GVPR_SCRIPT), str(dot_path)],
             capture_output=True,
+            check=False,
             text=True,
             encoding="utf-8",
             errors="replace",

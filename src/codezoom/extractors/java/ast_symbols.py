@@ -187,6 +187,7 @@ def _extract_symbols_from_bytecode(
     result = subprocess.run(
         [javap_path, "-v", "-l", "-p", *(str(f) for f in class_files)],
         capture_output=True,
+        check=False,
         text=True,
     )
     if result.returncode != 0:
@@ -436,6 +437,7 @@ def _extract_method_calls_from_bytecode(
     result = subprocess.run(
         [javap_path, "-c", "-p", *(str(f) for f in class_files)],
         capture_output=True,
+        check=False,
         text=True,
     )
     if result.returncode != 0:

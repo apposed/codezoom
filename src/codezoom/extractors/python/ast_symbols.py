@@ -239,9 +239,10 @@ class _CallExtractor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Name):
             self.called_names.add(node.func.id)
-        elif isinstance(node.func, ast.Attribute):
-            if isinstance(node.func.value, ast.Name):
-                self.called_names.add(node.func.attr)
+        elif isinstance(node.func, ast.Attribute) and isinstance(
+            node.func.value, ast.Name
+        ):
+            self.called_names.add(node.func.attr)
         self.generic_visit(node)
 
 

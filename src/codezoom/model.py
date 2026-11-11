@@ -53,3 +53,14 @@ class ProjectGraph:
     external_deps_graph: dict[str, list[str]] = field(default_factory=dict)
     module_direct_deps: dict[str, list[str]] = field(default_factory=dict)
     cycles: list[list[str]] = field(default_factory=list)
+
+    def sort_keys(self) -> None:
+        """Sort the keys of this graph's dicts, for reproducible output.
+
+        Extractors often build these dicts from sets, whose iteration order
+        varies between runs. Lists are left alone, since their order can be
+        meaningful (e.g. children in declaration order).
+        """
+        self.hierarchy = dict(sorted(self.hierarchy.items()))
+        self.external_deps_graph = dict(sorted(self.external_deps_graph.items()))
+        self.module_direct_deps = dict(sorted(self.module_direct_deps.items()))

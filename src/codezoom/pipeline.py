@@ -228,6 +228,8 @@ def _run_dot_file(
         logger.error("%s", e)
         sys.exit(1)
 
+    graph.sort_keys()
+
     # Note: Cycles are meaningless when edges have no direction.
     if directed:
         graph.cycles = find_cycles(graph.hierarchy)
@@ -297,6 +299,7 @@ def run(
         if ext.can_handle(project_dir):
             ext.extract(project_dir, graph)
 
+    graph.sort_keys()
     graph.cycles = find_cycles(graph.hierarchy) + find_class_cycles(graph.hierarchy)
     logger.debug("Cycles detected: %d", len(graph.cycles))
 
